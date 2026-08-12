@@ -199,6 +199,57 @@ round-trip property that `allIn(maxHammerFor(retail, d)) == d% under retail`
 across prices and targets, bid-increment rounding, province tax detection,
 parts-only detection, and every accessory/homonym trap found while building this.
 
+## Catalog / lot-list pages
+
+On a catalog page (`/catalog/<id>`) every lot tile gets two additions:
+
+| | |
+|---|---|
+| **Final price on the bid button** | `Bid 1.00 CAD` becomes `Bid 1.00 (Final $1.33) CAD` — the real out-the-door cost of that bid under the auction's own fees. |
+| **Deal dot after the shipping icon** | Colour-coded by final cost as a share of the new price. Hover for the discount. |
+
+| Dot | Final cost vs new | Meaning |
+|---|---|---|
+| 🟢 green | under 50% | great |
+| 🟡 yellow | 50–65% | good |
+| 🟠 orange | 65–75% | marginal |
+| 🔴 red | over 75% | poor once fees are counted |
+| ⚫ dark red | — | parts-only lot, not priced against a working unit |
+| ⚪ grey | — | no retail price found |
+
+### How it stays fast
+
+100 lots would be 100 page fetches scraped from the DOM. Instead the module uses
+HiBid's own GraphQL endpoint — the same one the app calls — so the whole page
+costs **two requests**:
+
+- `lotSearch(eventItemIds: […])` — every lot's description in one POST, which is
+  where `Est. Retail Price`, `Condition` and `Model` live. The tiles themselves
+  carry only a title and a bid.
+- `auction(id) { termsAndConditions buyerPremium }` — the fee text, which a
+  catalog page never renders.
+
+Neither needs authentication for public catalogs. Then:
+
+1. **Pass 1** (no per-lot network) writes the final price onto all 100 tiles at
+   once — typically under 4 seconds.
+2. **Pass 2** looks up retail in batches of 6 (`catalogBatchSize`, 5–10) with a
+   350 ms gap between batches, painting each dot as its batch lands. The pulse
+   loader stays up until the sweep finishes.
+
+Results are cached 12 h per query, so a second visit — or another page of the
+same auction with overlapping products — paints almost instantly. Navigating
+away mid-sweep abandons the remaining batches.
+
+### Known limitation
+
+On a measured run over 100 lots, 47 resolved to a live retail price and 53 did
+not. Two causes: generic goods with no model number produce a weak query that the
+relevance gate correctly refuses rather than guessing, and Amazon.ca throttles
+under a burst of ~100 lookups, leaving Best Buy Canada as the only source for
+much of the page. A grey dot means "unknown", never "bad deal" — the final price
+on the bid button is still exact, because it needs no lookup.
+
 ## Icon
 
 The dashboard icon is an "H+" tile in the same gradient as the in-page loader.

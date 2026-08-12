@@ -13,8 +13,8 @@ nobody.
 | Where | Example |
 |---|---|
 | `src/hibid-enhancer.user.js` → `// @version` | `0.4.0` |
-| `package.json` → `"version"` | `0.4.0` |
-| the git tag | `v0.4.0` |
+| `package.json` → `"version"` | `0.5.0` |
+| the git tag | `v0.5.0` |
 
 `npm test` fails if the first two disagree — that check exists precisely so a
 forgotten bump cannot become a silent non-release.
@@ -80,6 +80,7 @@ the parser fix so the suite keeps its teeth.
 
 | Version | Highlights |
 |---|---|
+| `v0.5.0` | Catalog pages: final price on every bid button and a colour-coded deal dot per lot, driven by GraphQL and batched lookups. |
 | `v0.4.0` | Condition accuracy: CR-separated field blocks, the "N/A" false positive, three-level severity, boundary-aware model matching. Measured 54/100 false parts-only down to 0. |
 | `v0.3.0` | Fixed a false parts-only banner on structured descriptions, curly-apostrophe premium parsing, empty search queries, and `+` in model codes. Summary panel redesigned as a table in HiBid's palette. |
 | `v0.2.0` | "H+" icon for the Tampermonkey dashboard; release process and version-consistency checks. |

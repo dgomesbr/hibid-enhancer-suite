@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HiBid Enhancer Suite
 // @namespace    https://github.com/dgomesbr/hibid-enhancer-suite
-// @version      0.4.0
+// @version      0.5.0
 // @description  Retail price lookup, fee-aware bid ceilings, and loud condition warnings on HiBid lot pages.
 // @author       dgomesbr
 // @license      MIT
@@ -58,6 +58,7 @@
     keepaDomain: 6,        // 6 = amazon.ca
     // Behaviour
     autoLookup: true,      // look up retail automatically on page load
+    catalogBatchSize: 6,   // lots priced concurrently on a catalog page (5-10)
     debug: false,
   };
 
@@ -1268,6 +1269,18 @@
     .${NS}-mini .${NS}-mini-accent{color:#e65100;font-size:15px;}
     .${NS}-mini .${NS}-mini-note{font-weight:400;color:#6b7c8c;font-size:12px;padding-left:12px;}
 
+    /* ---- Catalog tiles -------------------------------------------------- */
+    .${NS}-final{color:#e65100;font-weight:800;white-space:nowrap;}
+    .${NS}-ind{display:inline-block;width:11px;height:11px;border-radius:50%;margin-left:7px;
+      vertical-align:middle;border:1px solid rgba(0,0,0,.28);cursor:help;flex:0 0 auto;}
+    .${NS}-ind-green{background:#2e9e5b;}
+    .${NS}-ind-yellow{background:#f4c20d;}
+    .${NS}-ind-orange{background:#f97316;}
+    .${NS}-ind-red{background:#e53935;}
+    .${NS}-ind-na{background:#b0bec5;}
+    .${NS}-ind-parts{background:#4a1420;box-shadow:0 0 0 2px rgba(229,57,53,.55);}
+    .${NS}-ind-pending{background:linear-gradient(45deg,#38bdf8,#a855f7);animation:${NS}-pulse 1.2s infinite;}
+
     /* Floating pulse loader. Purely decorative: fixed, non-interactive, and it
        never gates rendering — the page and every DOM-derived block are already
        in place while this is visible. */
@@ -1921,6 +1934,246 @@
     }
   }
 
+
+  // ===========================================================================
+  // SECTION 16 — HiBid GraphQL (same-origin; public data needs no auth)
+  // ===========================================================================
+
+  /*
+   * A catalog page renders 100 lot tiles that carry only a title and the current
+   * bid. Everything needed to price a lot — the description with "Est. Retail
+   * Price", "Condition" and "Model" — sits behind the same GraphQL endpoint the
+   * app itself uses, so two POSTs replace 100 page fetches.
+   *
+   * Introspection is blocked; both operations below were derived from the app's
+   * own requests and verified against a live catalog. Neither needs a token.
+   */
+  const GQL = {
+    endpoint: () => `${location.origin}/graphql`,
+
+    async post(operationName, query, variables) {
+      const r = await http({
+        method: 'POST',
+        url: GQL.endpoint(),
+        headers: { 'content-type': 'application/json', accept: 'application/json' },
+        data: JSON.stringify({ operationName, query, variables }),
+      });
+      const body = JSON.parse(r.responseText);
+      if (body.errors && body.errors.length) {
+        throw new Error(`graphql: ${body.errors.map((e) => e.message).join('; ').slice(0, 200)}`);
+      }
+      return body.data;
+    },
+
+    /** Lots by event-item id. pageLength caps at 100 server-side. */
+    async lots(ids) {
+      const query = 'query HesLots($ids: [Int!], $pageNumber: Int!, $pageLength: Int!) {' +
+        ' lotSearch(input: {eventItemIds: $ids, status: ALL}, pageNumber: $pageNumber, pageLength: $pageLength) {' +
+        ' pagedResults { results { id lead description estimate lotNumber } } } }';
+      const out = [];
+      for (let i = 0; i < ids.length; i += 100) {
+        const data = await GQL.post('HesLots', query, {
+          ids: ids.slice(i, i + 100), pageNumber: 1, pageLength: 100,
+        });
+        const results = (((data || {}).lotSearch || {}).pagedResults || {}).results || [];
+        out.push(...results);
+      }
+      return out;
+    },
+
+    /** The auction's fee text. A catalog page never renders it. */
+    async auctionTerms(auctionId) {
+      const query = 'query HesAuction($id: Int!) {' +
+        ' auction(id: $id) { id termsAndConditions buyerPremium } }';
+      const data = await GQL.post('HesAuction', query, { id: auctionId });
+      const a = (data || {}).auction || {};
+      return [a.termsAndConditions, a.buyerPremium].filter(Boolean).join('\n\n');
+    },
+  };
+
+  // ===========================================================================
+  // SECTION 17 — Catalog / lot-list page
+  // ===========================================================================
+
+  /**
+   * Deal indicator colour from the ratio of final cost to the new price.
+   * Under half price is the goal; at three-quarters of retail an auction lot is
+   * not worth bidding on once fees and tax are counted.
+   */
+  function indicatorFor(ratio) {
+    if (ratio == null || !isFinite(ratio)) return { cls: 'na', label: 'no retail price found' };
+    if (ratio < 0.50) return { cls: 'green', label: 'great' };
+    if (ratio < 0.65) return { cls: 'yellow', label: 'good' };
+    if (ratio < 0.75) return { cls: 'orange', label: 'marginal' };
+    return { cls: 'red', label: 'poor' };
+  }
+
+  const Catalog = {
+    _done: null,
+
+    auctionId() {
+      const m = location.pathname.match(/\/(?:catalog|auction)\/(\d+)/i);
+      return m ? Number(m[1]) : null;
+    },
+
+    /** One entry per rendered lot tile. */
+    tiles() {
+      return Array.from(document.querySelectorAll('app-lot-tile, .lot-tile')).map((node) => {
+        const link = node.querySelector('a[href*="/lot/"]');
+        const id = link ? Number((link.getAttribute('href').match(/\/lot\/(\d+)/) || [])[1]) : null;
+        return {
+          node,
+          id,
+          title: txt(node.querySelector('h2.lot-title, .lot-title')),
+          amountEl: node.querySelector('.TileDisplayMinBid'),
+          leadHost: node.querySelector('.live-catalog-lot-lead-container'),
+          shipIcon: node.querySelector('i.shipping-indicator, i.fa-truck'),
+        };
+      }).filter((t) => t.id && t.node);
+    },
+
+    /** "Bid 1.00 CAD" -> "Bid 1.00 (Final $3.04) CAD", idempotently. */
+    setFinal(tile, cost) {
+      const host = tile.amountEl;
+      if (!host || !cost) return;
+
+      let tag = host.querySelector(`.${NS}-final`);
+      if (!tag) {
+        /*
+         * Rebuild the span once as "1.00 <span/> CAD". The original numbers are
+         * preserved verbatim and the button's attributes and handlers are never
+         * touched — this is a label, not the bid mechanism.
+         */
+        const m = txt(host).match(/^([\d,]+(?:\.\d+)?)\s*([A-Za-z]{3})?\s*$/);
+        if (!m) return;
+        host.textContent = '';
+        host.appendChild(document.createTextNode(`${m[1]} `));
+        tag = el('span', { class: `${NS}-final` });
+        host.appendChild(tag);
+        if (m[2]) host.appendChild(document.createTextNode(` ${m[2]}`));
+      }
+      tag.textContent = `(Final ${money(cost.total)})`;
+    },
+
+    /** Coloured dot immediately after the shipping icon. */
+    setIndicator(tile, info) {
+      const host = tile.leadHost || tile.node;
+      if (!host) return;
+
+      let dot = host.querySelector(`.${NS}-ind`);
+      if (!dot) {
+        dot = el('span', { class: `${NS}-ind` });
+        if (tile.shipIcon && tile.shipIcon.parentNode) {
+          tile.shipIcon.insertAdjacentElement('afterend', dot);
+        } else {
+          host.appendChild(dot);
+        }
+      }
+
+      if (info.pending) {
+        dot.className = `${NS}-ind ${NS}-ind-pending`;
+        dot.title = 'HiBid Enhancer: checking retail price…';
+        return;
+      }
+      if (info.partsOnly) {
+        dot.className = `${NS}-ind ${NS}-ind-parts`;
+        dot.title = '\u{1F480} Parts only — not priced against a working unit';
+        return;
+      }
+
+      const ind = indicatorFor(info.ratio);
+      dot.className = `${NS}-ind ${NS}-ind-${ind.cls}`;
+      dot.title = info.ratio == null
+        ? `No retail price found — final cost ${info.cost ? money(info.cost.total) : '—'}`
+        : `${pct(info.disc)} off retail (${ind.label})` +
+          `\nFinal cost ${money(info.cost.total)} vs ${money(info.retail)} new` +
+          (info.source ? ` at ${info.source}` : '') +
+          (info.damaged ? '\n⚠ lot reports damage — retail is for a new unit' : '');
+    },
+
+    async enhance() {
+      const tiles = Catalog.tiles();
+      if (!tiles.length) return false;
+
+      // Angular re-renders constantly; the same tile set is a no-op.
+      const key = tiles.map((t) => t.id).join(',');
+      if (Catalog._done === key) return true;
+      Catalog._done = key;
+
+      Loader.show();
+      try {
+        const auctionId = Catalog.auctionId();
+        const ids = tiles.map((t) => t.id);
+
+        // Fees and all 100 descriptions in parallel: two requests total.
+        const [termsText, lots] = await Promise.all([
+          auctionId
+            ? GQL.auctionTerms(auctionId).catch((e) => { warn('terms:', e.message); return ''; })
+            : Promise.resolve(''),
+          GQL.lots(ids).catch((e) => { warn('lots:', e.message); return []; }),
+        ]);
+
+        const fees = parseFees([termsText, (document.body.innerText || '').slice(0, 4000)]);
+        const byId = new Map(lots.map((l) => [l.id, l]));
+
+        // ---- pass 1: final price on every tile, zero network per lot ------
+        const work = [];
+        for (const tile of tiles) {
+          const lot = byId.get(tile.id) || {};
+          const lead = lot.lead || tile.title || '';
+          const description = lot.description || '';
+          const cond = assessCondition([lead, description].join('\n'));
+          const large = isLargeItem(`${lead}\n${description}`);
+          const next = num(txt(tile.amountEl));
+          const cost = next != null ? allIn(next, fees, { large }) : null;
+
+          Catalog.setFinal(tile, cost);
+          Catalog.setIndicator(tile, { pending: true });
+
+          work.push({
+            tile,
+            product: extractProduct(lead, description),
+            stated: extractStatedRetail(lead, description, lot.estimate || ''),
+            cond, cost, next, large,
+          });
+        }
+
+        // ---- pass 2: retail lookups, in small batches --------------------
+        const size = Math.max(1, Math.min(20, CFG.catalogBatchSize || 6));
+        let priced = 0;
+        for (let i = 0; i < work.length; i += size) {
+          if (Catalog._done !== key) return true;  // navigated away mid-sweep
+          await Promise.all(work.slice(i, i + size).map(async (w) => {
+            let best = null;
+            if (!w.cond.partsOnly && w.product.query) {
+              try {
+                best = pickBest((await lookupRetail(w.product)).quotes);
+              } catch (e) { /* fall back to the auctioneer's own figure */ }
+            }
+            const retail = best ? best.price : (w.stated ? w.stated.value : null);
+            const ratio = (retail && w.cost) ? w.cost.total / retail : null;
+            if (ratio != null) priced++;
+            Catalog.setIndicator(w.tile, {
+              ratio,
+              disc: ratio == null ? null : (1 - ratio) * 100,
+              cost: w.cost,
+              retail,
+              source: best ? best.provider : (w.stated ? 'auctioneer’s figure' : null),
+              partsOnly: w.cond.partsOnly,
+              damaged: w.cond.damaged,
+            });
+          }));
+          // Be a polite client between batches.
+          if (i + size < work.length) await new Promise((r) => setTimeout(r, 350));
+        }
+        log(`catalog: ${priced}/${work.length} lots priced`);
+        return true;
+      } finally {
+        Loader.hide();
+      }
+    },
+  };
+
   // ===========================================================================
   // SECTION 14 — Page router + SPA navigation
   // ===========================================================================
@@ -1928,16 +2181,16 @@
   function pageKind() {
     const p = location.pathname;
     if (/^\/lot\//i.test(p)) return 'detail';
+    if (/^\/(?:catalog|auction)\//i.test(p)) return 'catalog';
     if (/^\/lots\b/i.test(p) || /^\/search\b/i.test(p)) return 'search';
-    if (/^\/auction\//i.test(p) || /^\/catalog\//i.test(p)) return 'listing';
     return 'other';
   }
 
-  // Extension points for the remaining page types.
   const PAGES = {
     detail: enhanceDetail,
-    search: async () => false,   // TODO: per-card badges on search results
-    listing: async () => false,  // TODO: per-card badges on an auction catalog
+    catalog: () => Catalog.enhance(),
+    // Search results reuse the same tile markup, so the catalog pass fits.
+    search: () => Catalog.enhance(),
     other: async () => true,
   };
 
@@ -1980,7 +2233,9 @@
     const obs = new MutationObserver(() => {
       const key = `${pageKind()}|${location.pathname}`;
       if (State.lastKey === key) return;                 // already done
-      if (!document.querySelector('app-information-panel')) return;
+      const k = pageKind();
+      if (k === 'detail' && !document.querySelector('app-information-panel')) return;
+      if ((k === 'catalog' || k === 'search') && !document.querySelector('app-lot-tile, .lot-tile')) return;
       kick('dom');
     });
     obs.observe(document.body, { childList: true, subtree: true });

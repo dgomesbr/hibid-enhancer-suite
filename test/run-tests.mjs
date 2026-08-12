@@ -572,5 +572,146 @@ for (const host of ['amazon.ca', 'bestbuy.ca', 'api.keepa.com']) {
 }
 
 // ===========================================================================
+console.log('\n11. Lot detail page: URLs, notices, chips and dates');
+// ===========================================================================
+
+// -- ids out of URLs --------------------------------------------------------
+check('lot id from a lot path', H.parseLotId('/lot/317094503/msi-b550m-pro-vdh-wifi'), 317094503);
+check('lot id survives a query string', H.parseLotId('/lot/316725406/sony?ref=lot-list'), 316725406);
+check('a catalog path has no lot id', H.parseLotId('/catalog/764522/some-sale'), null);
+check('no path, no id', H.parseLotId(null), null);
+
+check('auction id from a catalog href', H.parseAuctionId('/catalog/764522/canadas-largest-auction'), 764522);
+check('auction id from an auction href', H.parseAuctionId('https://x.hibid.com/auction/766625/sale'), 766625);
+check('a lot href has no auction id', H.parseAuctionId('/lot/317094503/thing'), null);
+check('no href, no auction id', H.parseAuctionId(undefined), null);
+
+// -- notices ---------------------------------------------------------------
+/*
+ * The heading and the body have to come apart cleanly, because the heading
+ * becomes the link at the bottom of the page and the body becomes what the link
+ * opens. HiBid emits the heading with a trailing colon inside an <h2>, so the
+ * concatenated textContent always starts "Bidding Notice: ...".
+ */
+const bn = H.splitNotice('Bidding Notice:\n\nALL ITEMS ARE SOLD AS-IS. No returns.');
+check('notice heading', bn.title, 'Bidding Notice');
+check('notice body', bn.body, 'ALL ITEMS ARE SOLD AS-IS. No returns.');
+
+const an = H.splitNotice('Shipping / Pick Up: Saturday only.');
+check('a heading may contain a slash', an.title, 'Shipping / Pick Up');
+
+// A colon inside prose must not be mistaken for a heading separator.
+const prose = H.splitNotice('Everything sold as is, where is: no exceptions at all whatsoever today');
+check('a long prefix is prose, not a heading', prose.title, 'Notice');
+check('nothing at all yields nothing', H.splitNotice('   '), null);
+
+// -- condition tone --------------------------------------------------------
+check('brand new is green', H.conditionTone('BRAND NEW'), 'ok');
+check('excellent is green', H.conditionTone('EXCELLENT'), 'ok');
+check('open box is amber', H.conditionTone('OPEN BOX'), 'warn');
+check('damaged is red', H.conditionTone('DAMAGED - CRACKED SCREEN'), 'bad');
+/*
+ * The whole reason the test order is worst-first: auctioneers really do write
+ * "BRAND NEW - FOR PARTS ONLY", and a new-first match painted that green.
+ */
+check('new-but-for-parts is red, not green', H.conditionTone('BRAND NEW - FOR PARTS ONLY'), 'bad');
+check('an unrecognised word stays neutral', H.conditionTone('C-GRADE'), 'mute');
+check('no condition stated is neutral', H.conditionTone(''), 'mute');
+
+// -- condition chips -------------------------------------------------------
+const CHIP_DESC = [
+  'Est. Retail Price: 124.00',
+  'Condition: EXCELLENT',
+  'Model: A-Series',
+  'In packaging? Yes',
+  'Requires Assembly? N/A',
+  'Is Item Functional? Unable to Test',
+  'Is Item Damaged? No',
+  'Missing Major Parts? No',
+].join('\n');
+
+const chips = H.conditionChips(CHIP_DESC);
+const chipBy = (label) => chips.find((c) => c.label === label);
+check('condition leads the chips', chips[0].label, 'Condition');
+check('and carries its own tone', chips[0].tone, 'ok');
+check('"Damaged? No" is reassuring, so green', chipBy('Damaged').tone, 'ok');
+check('and reads as the answer given', chipBy('Damaged').value, 'No');
+check('"Missing parts? No" is green', chipBy('Missing parts').tone, 'ok');
+check('"In packaging? Yes" is green', chipBy('In packaging').tone, 'ok');
+/*
+ * "Unable to Test" is neither yes nor no. Colouring it green would claim the
+ * auctioneer said the item works, which is the one thing they did not say.
+ */
+check('an untestable item is neutral, not green', chipBy('Functional').tone, 'mute');
+check('and shows the auctioneer\'s own words', chipBy('Functional').value, 'Unable to Test');
+check('"Requires Assembly? N/A" is neutral', chipBy('Assembly').tone, 'mute');
+check('Model is not a chip — it is a fact', chipBy('Model'), undefined);
+
+// A lot answering yes to the bad questions must go red.
+const badChips = H.conditionChips('Condition: FAIR\nIs Item Damaged? Yes\nMissing Major Parts? Yes');
+check('"Damaged? Yes" is red', badChips.find((c) => c.label === 'Damaged').tone, 'bad');
+check('"Missing parts? Yes" is red', badChips.find((c) => c.label === 'Missing parts').tone, 'bad');
+check('prose with no fields yields no chips', H.conditionChips('Tested working. Nice unit.').length, 0);
+check('no description yields no chips', H.conditionChips(null).length, 0);
+
+// -- information facts -----------------------------------------------------
+const facts = H.infoFacts({
+  lotNumber: '8590',
+  category: [{ categoryName: 'Networking' }, { categoryName: 'Computers' }, { categoryName: 'Computers & Electronics' }],
+  model: 'B550M',
+  estimate: '',
+  statedRetail: 124,
+  quantity: 1,
+  pictureCount: 11,
+  bidCount: 0,
+  shippingOffered: true,
+});
+const labels = facts.map((f) => f.label);
+check('facts are ordered lot-first', labels[0], 'Lot #');
+// GraphQL returns the category tree leaf-first; a breadcrumb reads the other way.
+check('category reads root to leaf',
+  facts.find((f) => f.label === 'Category').value, 'Computers & Electronics › Computers › Networking');
+falsy('an empty estimate is not printed', labels.includes('Estimate'));
+falsy('a quantity of 1 is not printed', labels.includes('Quantity'));
+truthy('a quantity of 3 is printed', H.infoFacts({ quantity: 3 }).some((f) => f.label === 'Quantity'));
+check('stated retail is formatted as money',
+  facts.find((f) => f.label === 'Auctioneer states').value, '$124.00');
+// A zero bid count is information ("nobody wants it yet"), not a blank.
+check('zero bids is still printed', facts.find((f) => f.label === 'Bids so far').value, '0');
+check('shipping reads as words', facts.find((f) => f.label === 'Shipping').value, 'Offered');
+check('no shipping reads as pick-up only',
+  H.infoFacts({ shippingOffered: false }).find((f) => f.label === 'Shipping').value, 'Pick-up only');
+check('an unknown shipping status is omitted', H.infoFacts({}).length, 0);
+// The DOM path has no category tree, only the panel's own breadcrumb string.
+check('categoryText is the fallback',
+  H.infoFacts({ categoryText: 'Computers - Networking' }).find((f) => f.label === 'Category').value,
+  'Computers - Networking');
+
+// -- timestamps ------------------------------------------------------------
+/*
+ * HiBid returns "2026-08-12T19:00:00" with no offset: that is already the
+ * auction's local wall clock. new Date() would apply the viewer's timezone and
+ * reprint a 7:00 PM close as 11:00 PM for anyone west of the auctioneer, which
+ * is why this is string arithmetic and why it is worth a test.
+ */
+check('a close time keeps the stated wall clock', H.fmtDateTime('2026-08-12T19:00:00'), '12 Aug 2026, 7:00 pm');
+check('morning is am', H.fmtDateTime('2026-08-05T04:05:00'), '5 Aug 2026, 4:05 am');
+check('midnight is 12 am, not 0 am', H.fmtDateTime('2026-01-01T00:30:00'), '1 Jan 2026, 12:30 am');
+check('noon is 12 pm, not 0 pm', H.fmtDateTime('2026-01-01T12:00:00'), '1 Jan 2026, 12:00 pm');
+check('a date with no time is just the date', H.fmtDateTime('2026-07-28'), '28 Jul 2026');
+check('nonsense is not a date', H.fmtDateTime('soon'), null);
+check('no timestamp at all', H.fmtDateTime(null), null);
+check('an impossible month is rejected', H.fmtDateTime('2026-13-01T10:00:00'), null);
+
+// -- addresses -------------------------------------------------------------
+check('a full auctioneer address',
+  H.formatAddress({ address: '23 Buchanan Crt', city: 'London', state: 'ON', postalCode: 'N5Z 4P9' }),
+  '23 Buchanan Crt, London, ON N5Z 4P9');
+check('a city-only address', H.formatAddress({ city: 'London', state: 'ON' }), 'London, ON');
+check('a street with nothing else', H.formatAddress({ address: '400 Jones Rd' }), '400 Jones Rd');
+check('an empty record has no address', H.formatAddress({}), null);
+check('no record at all', H.formatAddress(null), null);
+
+// ===========================================================================
 console.log(`\n${pass + fail} assertions: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

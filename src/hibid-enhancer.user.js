@@ -1452,7 +1452,370 @@
     @media (prefers-reduced-motion:reduce){
       .${NS}-loader{animation-duration:2.4s;}
     }
+
+    /* ---- Light cards ---------------------------------------------------
+       The dark summary panel above answers "what do I bid". Everything else
+       on the page is reference material, so it gets the quiet light card:
+       same HiBid blue, no gradient, no shadow to speak of. */
+    .${NS}-card{--hes-blue:#266296;--hes-edge:#d8e2ec;--hes-quiet:#7b8c9c;
+      border:1px solid var(--hes-edge);border-radius:10px;background:#fff;margin:0 0 14px;
+      box-shadow:0 1px 3px rgba(13,27,40,.06);overflow:hidden;color:#212529;
+      font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;}
+    .${NS}-card-head{display:flex;align-items:center;justify-content:space-between;gap:8px 14px;
+      flex-wrap:wrap;padding:8px 14px;border-bottom:1px solid #e5edf4;
+      background:linear-gradient(90deg,#eff5fa 0%,#fbfdff 100%);}
+    .${NS}-card-title{font-size:12px;font-weight:800;letter-spacing:.9px;text-transform:uppercase;
+      color:#1d4a72;}
+    .${NS}-card-sub{font-size:12px;color:#6b7c8c;overflow-wrap:anywhere;}
+    .${NS}-card-body{padding:11px 14px 12px;}
+
+    .${NS}-facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:9px 20px;}
+    .${NS}-fact{min-width:0;}
+    .${NS}-fact-k{display:block;font-size:10.5px;font-weight:700;letter-spacing:.7px;
+      text-transform:uppercase;color:var(--hes-quiet,#7b8c9c);}
+    .${NS}-fact-v{display:block;font-size:13.5px;font-weight:600;color:#16283b;overflow-wrap:anywhere;}
+    .${NS}-fact-v a{color:#266296;}
+
+    .${NS}-chips{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px;}
+    .${NS}-tag{display:inline-flex;align-items:baseline;gap:5px;padding:2px 9px;border-radius:12px;
+      font-size:11.5px;font-weight:700;border:1px solid transparent;white-space:nowrap;}
+    .${NS}-tag i{font-style:normal;font-weight:600;opacity:.75;font-size:10.5px;
+      text-transform:uppercase;letter-spacing:.5px;}
+    .${NS}-tag-ok{background:#e6f6ec;border-color:#a9dcbd;color:#17552a;}
+    .${NS}-tag-warn{background:#fff5e0;border-color:#f0d190;color:#7a4a00;}
+    .${NS}-tag-bad{background:#fdecec;border-color:#f0b4b4;color:#8c1c1c;}
+    .${NS}-tag-mute{background:#f1f5f9;border-color:#d5dee7;color:#42556a;}
+
+    .${NS}-block{border-top:1px solid #eef3f8;margin-top:11px;padding-top:9px;}
+    .${NS}-block-title{font-size:10.5px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;
+      color:#7b8c9c;margin-bottom:3px;}
+
+    .${NS}-fold{margin-top:8px;}
+    .${NS}-fold > summary{cursor:pointer;font-size:12.5px;font-weight:600;color:#266296;
+      list-style:none;display:inline-flex;align-items:center;gap:6px;}
+    .${NS}-fold > summary::-webkit-details-marker{display:none;}
+    .${NS}-fold > summary::before{content:'▸';font-size:11px;transition:transform .15s;}
+    .${NS}-fold[open] > summary::before{content:'▾';}
+    .${NS}-fold-body{margin-top:6px;padding:9px 11px;background:#fafcfe;border-left:3px solid #cddceb;
+      border-radius:0 6px 6px 0;font-size:13px;line-height:1.55;color:#33475b;
+      white-space:pre-wrap;max-height:300px;overflow:auto;}
+
+    /* Buttons for the auction / auctioneer box. Outline by default so the
+       page keeps exactly one filled primary action: HiBid's own Bid button. */
+    .${NS}-btns{display:flex;flex-wrap:wrap;gap:8px;margin-top:11px;}
+    .${NS}-abtn{display:inline-flex;align-items:center;gap:6px;padding:6px 13px;border-radius:8px;
+      font-size:12.5px;font-weight:600;text-decoration:none;cursor:pointer;
+      border:1px solid #bcd0e2;color:#1d4a72;background:#fff;font-family:inherit;line-height:1.5;}
+    .${NS}-abtn:hover{background:#266296;border-color:#266296;color:#fff;text-decoration:none;}
+    .${NS}-abtn-primary{background:#266296;border-color:#266296;color:#fff;}
+    .${NS}-abtn-primary:hover{background:#1b4a73;border-color:#1b4a73;}
+
+    /* ---- Notices, demoted to the bottom of the page --------------------- */
+    .${NS}-notices{margin:16px 0 10px;padding-top:10px;border-top:1px solid #e3ebf3;
+      font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;}
+    .${NS}-notices-hint{font-size:11px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;
+      color:#8b9aa8;margin-bottom:7px;}
+    .${NS}-notice{margin:0 0 6px;}
+    .${NS}-notice > summary{cursor:pointer;list-style:none;display:inline-flex;align-items:center;gap:6px;
+      font-size:12.5px;font-weight:700;color:#8c1c1c;padding:3px 11px;border:1px solid #eccccc;
+      border-radius:14px;background:#fdf6f6;}
+    .${NS}-notice > summary::-webkit-details-marker{display:none;}
+    .${NS}-notice > summary:hover{background:#fbecec;border-color:#c62828;}
+    .${NS}-notice[open] > summary{background:#fbecec;border-color:#c62828;}
+    .${NS}-notice-body{margin:7px 0 4px;padding:10px 12px;border-left:3px solid #c62828;
+      background:#fffafa;font-size:13px;line-height:1.55;color:#4a3535;max-height:320px;overflow:auto;}
+    .${NS}-notice-body p{margin:0 0 6px;}
+
+    /* ---- Lot detail layout ---------------------------------------------
+       Everything below is scoped to body.${NS}-detail, which is set only on a
+       lot page and removed on navigation, so a stray rule can never leak into
+       a catalog or search page.
+
+       Nothing here moves an Angular node. The reordering is flex order on
+       nodes Angular owns, and the blocks that move to the bottom box are
+       hidden and rebuilt from their own hrefs. Angular's change detection sees
+       the tree it rendered, unchanged. */
+    body.${NS}-detail .lot-details-container > .row:first-child{flex-direction:column;flex-wrap:nowrap;}
+    body.${NS}-detail .lot-details-container > .row:first-child > [class*="col-md-4"]{order:1;}
+    body.${NS}-detail .lot-details-container > .row:first-child > [class*="col-md-8"]{order:2;padding-bottom:0!important;}
+    body.${NS}-detail .lot-details-container > .row:first-child > [class*="col-md-"]{
+      flex:0 0 auto;width:100%;max-width:100%;}
+    /* Same rules keyed on content instead of position, so anything that ends up
+       inserted ahead of the gallery row cannot quietly undo the reorder. Its own
+       declaration because :has() is not everywhere yet. */
+    body.${NS}-detail .lot-details-container > .row:has(app-lot-image-gallery){
+      flex-direction:column;flex-wrap:nowrap;}
+    body.${NS}-detail .lot-details-container > .row:has(app-lot-image-gallery) > [class*="col-md-4"]{order:1;}
+    body.${NS}-detail .lot-details-container > .row:has(app-lot-image-gallery) > [class*="col-md-8"]{
+      order:2;padding-bottom:0!important;}
+    body.${NS}-detail .lot-details-container > .row:has(app-lot-image-gallery) > [class*="col-md-"]{
+      flex:0 0 auto;width:100%;max-width:100%;}
+    /* Full width would blow the gallery up to 1200px tall on a desktop. */
+    body.${NS}-detail app-lot-image-gallery{display:block;max-width:900px;margin:0 auto;}
+
+    /* The subpanel becomes one horizontal bid strip: watch, then price, then
+       the Bid button pinned right. */
+    body.${NS}-detail app-lot-details-subpanel{display:flex;flex-wrap:wrap;align-items:center;
+      gap:8px 18px;background:#f4f9fc;border:1px solid #dbe6f0;border-radius:10px;
+      padding:9px 14px;margin:0 0 14px;}
+    body.${NS}-detail app-lot-details-subpanel > *{margin:0!important;}
+    body.${NS}-detail app-lot-details-subpanel .lot-high-bid{font-size:16px;}
+    body.${NS}-detail app-lot-details-subpanel app-lot-buttons{margin-left:auto!important;}
+    body.${NS}-detail app-lot-details-subpanel .lot-bid-button{min-width:150px;}
+
+    /* Hiding the relocated blocks is done twice on purpose. The class is set
+       once per run; the selectors below keep them hidden through an Angular
+       re-render that replaces the nodes and takes our class with them.
+       :has() lives in its own rule so a browser without it loses only these
+       two lines instead of the whole declaration block. */
+    body.${NS}-detail .${NS}-relocated{display:none!important;}
+    /* The auctioneer's own banner. See hideAuctionBanner for why this is a
+       separate class and why JS has to decide when to apply it. */
+    body.${NS}-detail .${NS}-hide-banner{display:none!important;}
+    body.${NS}-detail .${NS}-hide-banner-host{padding-top:0!important;padding-bottom:0!important;
+      min-height:0!important;}
+    body.${NS}-detail app-lot-details-subpanel > app-share,
+    body.${NS}-detail app-lot-details-subpanel > .lot-auction-date-container{display:none!important;}
+    body.${NS}-detail app-lot-details-subpanel > div:has(> app-city-state-zip-link),
+    body.${NS}-detail app-lot-details-subpanel > div:has(> app-auctioneer-info){display:none!important;}
+    /* Only hide HiBid's Information accordion once our own card is actually on
+       the page — otherwise the fallback still renders the retail row in it. */
+    body.${NS}-detail.${NS}-card-live .panel-group > app-collapse-panel:has(app-information-panel){
+      display:none!important;}
+    /* Inside the card the retail cell's shopping links sit a few hundred pixels
+       under an identical set in the summary panel. Suppressed here only; on the
+       table fallback they are the only copy on the page. */
+    body.${NS}-detail.${NS}-card-live #${NS}-retail-cell > .${NS}-links{display:none;}
+
+    /* Six stacked accordions cost ~330px of header before a word is read.
+       Two columns and a smaller header get that back. */
+    body.${NS}-detail .panel-group{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));
+      gap:10px;align-items:start;}
+    body.${NS}-detail app-collapse-panel{display:block;min-width:0;}
+    body.${NS}-detail .collapse-container{border:1px solid #dde7f0;border-radius:9px;background:#fff;}
+    body.${NS}-detail .collapse-header{padding:8px 12px;font-size:13px;font-weight:700;
+      background:#f4f8fb;color:#1d4a72;line-height:1.3;}
+    body.${NS}-detail .collapse-body{font-size:12.5px;}
+    body.${NS}-detail .collapse-body th,body.${NS}-detail .collapse-body td{
+      padding:3px 8px;font-size:12.5px;line-height:1.45;}
+    /* Cap only the inner panel components. The collapse-body itself is what
+       Angular animates, and clamping that fights the animation. */
+    body.${NS}-detail .collapse-body > app-terms-conditions-panel,
+    body.${NS}-detail .collapse-body > app-payment-info-panel,
+    body.${NS}-detail .collapse-body > app-shipping-pickup-panel,
+    body.${NS}-detail .collapse-body > app-bid-increments-panel,
+    body.${NS}-detail .collapse-body > app-auction-info-panel{
+      display:block;max-height:300px;overflow:auto;padding:2px 4px;}
   `);
+
+  // ===========================================================================
+  // SECTION 10A — Performance instrumentation
+  // ===========================================================================
+
+  /*
+   * A userscript that runs at document-idle on someone else's Angular app is
+   * very easy to make slow by accident, and impossible to tune by feel. Perf
+   * records a duration per named span and keeps the last run on
+   * `window.__hesPerf` so the numbers can be read from the console on a real
+   * page instead of guessed at.
+   *
+   * The recording itself is two clock reads and an array push per span, so it
+   * stays on in normal use; only the console summary is behind CFG.debug.
+   */
+  const Perf = {
+    spans: [],
+    counters: {},
+    now: () => (typeof performance !== 'undefined' && performance.now
+      ? performance.now() : Date.now()),
+
+    reset() { Perf.spans = []; Perf.counters = {}; },
+
+    /** Time a synchronous block. Returns whatever the block returns. */
+    span(label, fn) {
+      const t = Perf.now();
+      try { return fn(); } finally { Perf.spans.push({ label, ms: +(Perf.now() - t).toFixed(2) }); }
+    },
+
+    /** Time a promise without changing its resolution value or rejection. */
+    async spanAsync(label, promise) {
+      const t = Perf.now();
+      try { return await promise; } finally { Perf.spans.push({ label, ms: +(Perf.now() - t).toFixed(2) }); }
+    },
+
+    count(label, n = 1) { Perf.counters[label] = (Perf.counters[label] || 0) + n; },
+
+    /** Cheap page-weight numbers, useful for judging a layout change. */
+    layout() {
+      if (typeof document === 'undefined' || !document.documentElement) return {};
+      return {
+        docHeightPx: document.documentElement.scrollHeight,
+        domNodes: document.getElementsByTagName('*').length,
+      };
+    },
+
+    report(tag) {
+      const total = +Perf.spans.reduce((a, s) => a + s.ms, 0).toFixed(2);
+      const out = { tag, total, spans: Perf.spans.slice(), counters: Object.assign({}, Perf.counters),
+        layout: Perf.layout() };
+      if (typeof window !== 'undefined') window.__hesPerf = out;
+      if (CFG.debug) {
+        log(`perf ${tag}: ${total}ms total`, out.layout);
+        for (const s of out.spans) log(`  ${s.ms.toFixed(2)}ms  ${s.label}`);
+        for (const [k, v] of Object.entries(out.counters)) log(`  x${v}  ${k}`);
+      }
+      return out;
+    },
+  };
+
+  // ===========================================================================
+  // SECTION 10B — Pure helpers for the redesigned lot detail page
+  // ===========================================================================
+
+  /** Event-item id from a lot URL path: /lot/317094503/slug -> 317094503. */
+  function parseLotId(pathname) {
+    const m = String(pathname == null ? '' : pathname).match(/\/lot\/(\d+)/i);
+    return m ? Number(m[1]) : null;
+  }
+
+  /** Auction id from any /catalog/<id>/… or /auction/<id>/… URL. */
+  function parseAuctionId(href) {
+    const m = String(href == null ? '' : href).match(/\/(?:catalog|auction)\/(\d+)/i);
+    return m ? Number(m[1]) : null;
+  }
+
+  /**
+   * Split a notice into its heading and its prose.
+   *
+   * HiBid renders these as "Bidding Notice:" in an <h2> followed by the body,
+   * so the concatenated text starts with the label. Demoting the notice to a
+   * link at the bottom of the page needs the label for the link and the body
+   * for what the link opens.
+   */
+  function splitNotice(text) {
+    const t = normalise(text).replace(/ /g, ' ').trim();
+    if (!t) return null;
+    const m = t.match(/^([A-Za-z][A-Za-z /&'-]{2,40}?)\s*:\s*([\s\S]+)$/);
+    if (m && m[2].trim()) return { title: m[1].trim(), body: m[2].trim() };
+    return { title: 'Notice', body: t };
+  }
+
+  /**
+   * A condition word turned into a traffic light.
+   *
+   * Checked worst-first on purpose: "BRAND NEW - FOR PARTS" has to come out
+   * red, and a naive new-first test would call it green.
+   */
+  function conditionTone(text) {
+    const t = normalise(text).toLowerCase();
+    if (!t) return 'mute';
+    if (/(?:\bparts\b|salvage|scrap|broken|\bdead\b|not\s*working|damaged|incomplete)/.test(t)) return 'bad';
+    if (/(?:brand\s*new|new\s*in\s*box|\bnib\b|sealed|\bnew\b|excellent|like\s*new|\bmint\b)/.test(t)) return 'ok';
+    if (/(?:open\s*box|refurb|\bused\b|\bfair\b|\bgood\b|\bscratch|\bdent|cosmetic)/.test(t)) return 'warn';
+    return 'mute';
+  }
+
+  /*
+   * The yes/no questions auctioneers answer in the description, and which
+   * answer is the reassuring one. `want: true` means "Yes is good".
+   */
+  const CHIP_FIELDS = [
+    { names: ['is item functional?', 'item functional?', 'is item functional', 'functional'],
+      label: 'Functional', want: true },
+    { names: ['is item damaged?', 'item damaged?', 'is item damaged', 'damaged'],
+      label: 'Damaged', want: false },
+    { names: ['missing major parts?', 'missing major parts', 'missing parts?', 'missing parts'],
+      label: 'Missing parts', want: false },
+    { names: ['in packaging?', 'in packaging'], label: 'In packaging', want: true },
+    { names: ['requires assembly?', 'requires assembly'], label: 'Assembly', want: false },
+  ];
+
+  /**
+   * Turn the description's structured block into colour-coded chips.
+   *
+   * Everything here is read from the parsed fields, never from the raw text:
+   * the label "Is Item Damaged?" contains the word "damaged", so scanning the
+   * block itself paints a perfectly good lot red.
+   */
+  function conditionChips(description) {
+    const { fields } = parseFields(description || '');
+    const chips = [];
+
+    const condition = field(fields, 'condition');
+    if (condition && condition.trim()) {
+      chips.push({ label: 'Condition', value: condition.trim(), tone: conditionTone(condition) });
+    }
+
+    for (const spec of CHIP_FIELDS) {
+      const raw = field(fields, ...spec.names);
+      if (raw == null || !String(raw).trim()) continue;
+      const yn = yesNo(raw);
+      chips.push({
+        label: spec.label,
+        // "Unable to Test" is an answer worth showing verbatim; it is not a no.
+        value: yn == null ? String(raw).trim() : (yn ? 'Yes' : 'No'),
+        tone: yn == null ? 'mute' : (yn === spec.want ? 'ok' : 'bad'),
+      });
+    }
+    return chips;
+  }
+
+  /**
+   * The Information box as an ordered list of facts, blanks dropped.
+   *
+   * Pure, because the interesting part is the ordering and the "don't print a
+   * row the auctioneer left empty" rule, and both are worth a test. Quantity
+   * of 1 is deliberately omitted: every lot is 1 unless it says otherwise, so
+   * printing it is a row of noise on every page.
+   */
+  function infoFacts(lot) {
+    const l = lot || {};
+    const cats = (l.category || []).map((c) => c && c.categoryName).filter(Boolean);
+    // GraphQL returns the tree leaf-first; a breadcrumb reads root-first.
+    const category = cats.length ? cats.slice().reverse().join(' › ') : (l.categoryText || null);
+
+    return [
+      { label: 'Lot #', value: l.lotNumber },
+      { label: 'Category', value: category },
+      { label: 'Model', value: l.model },
+      { label: 'Estimate', value: l.estimate },
+      { label: 'Auctioneer states', value: l.statedRetail != null ? money(l.statedRetail) : null },
+      { label: 'Quantity', value: (l.quantity != null && Number(l.quantity) !== 1) ? String(l.quantity) : null },
+      { label: 'Photos', value: l.pictureCount ? String(l.pictureCount) : null },
+      { label: 'Bids so far', value: l.bidCount != null ? String(l.bidCount) : null },
+      { label: 'Shipping', value: l.shippingOffered == null ? null
+        : (l.shippingOffered ? 'Offered' : 'Pick-up only') },
+    ].filter((f) => f.value != null && String(f.value).trim() !== '');
+  }
+
+  /**
+   * Format one of HiBid's timestamps.
+   *
+   * The API returns "2026-08-12T19:00:00" with no offset: it is already the
+   * auction's local wall clock. Feeding that to `new Date()` makes the browser
+   * apply its own timezone and quietly reprints a 7:00 PM close as 11:00 PM
+   * for anyone west of the auctioneer, so this stays string arithmetic.
+   */
+  function fmtDateTime(iso) {
+    const m = String(iso == null ? '' : iso).match(/^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2}))?/);
+    if (!m) return null;
+    const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const month = MON[Number(m[2]) - 1];
+    if (!month) return null;
+    const day = `${Number(m[3])} ${month} ${m[1]}`;
+    if (!m[4]) return day;
+    const h24 = Number(m[5] == null ? NaN : m[4]);
+    if (!isFinite(h24)) return day;
+    const ampm = h24 >= 12 ? 'pm' : 'am';
+    return `${day}, ${h24 % 12 || 12}:${m[5]} ${ampm}`;
+  }
+
+  /** "23 Buchanan Crt, London, ON N5Z 4P9" from whatever parts exist. */
+  function formatAddress(a) {
+    const x = a || {};
+    const cityLine = [x.city, [x.state, x.postalCode].filter(Boolean).join(' ')]
+      .filter((s) => s && String(s).trim()).join(', ');
+    return [x.address, cityLine].filter((s) => s && String(s).trim()).join(', ') || null;
+  }
 
   // ===========================================================================
   // SECTION 11 — DOM helpers for the lot detail page
@@ -1466,6 +1829,10 @@
       if (!panel) return {};
       const map = {};
       panel.querySelectorAll('tr').forEach((tr) => {
+        // Our own compact tables live inside this panel on the fallback path.
+        // Scraping them turns "Max bid (50% off)" into an information field and,
+        // worse, makes the label set depend on what we rendered last time.
+        if (tr.closest(`.${NS}-mini, .${NS}-sumtable, .${NS}-card`)) return;
         const th = tr.querySelector('th');
         const td = tr.querySelector('td');
         if (!th || !td) return;
@@ -1474,16 +1841,102 @@
       return map;
     },
 
+    /*
+     * Collapse panels, read once per run.
+     *
+     * `panel()` used to walk every app-collapse-panel and lower-case its whole
+     * textContent to match a heading. Terms and Conditions alone is a few KB,
+     * and enhanceDetail asks for three different panels, so the page's entire
+     * boilerplate was scanned and lower-cased three times per render. The
+     * headings are in `.collapse-header`, which is a few words, so match on
+     * that instead and cache the list for the duration of one run.
+     */
+    _panels: null,
+
+    resetCache() { Detail._panels = null; },
+
+    panels() {
+      if (!Detail._panels) {
+        Perf.count('panel scan');
+        Detail._panels = Array.from(document.querySelectorAll('app-collapse-panel')).map((p) => {
+          const head = p.querySelector('.collapse-header');
+          return { node: p, head: txt(head || p).replace(/\s+/g, ' ').trim().toLowerCase() };
+        });
+      }
+      return Detail._panels;
+    },
+
     /** A collapse panel by its heading, e.g. "Terms and Conditions". */
     panel(headingStartsWith) {
-      const want = headingStartsWith.toLowerCase();
-      return Array.from(document.querySelectorAll('app-collapse-panel'))
-        .find((p) => txt(p).toLowerCase().replace(/\s+/g, ' ').trim().startsWith(want)) || null;
+      const want = String(headingStartsWith || '').toLowerCase();
+      const hit = Detail.panels().find((e) => e.head.startsWith(want));
+      return hit ? hit.node : null;
     },
 
     panelText(headingStartsWith) {
       const p = Detail.panel(headingStartsWith);
       return p ? txt(p) : null;
+    },
+
+    /** Event-item id, straight from the URL. */
+    eventItemId() { return parseLotId(location.pathname); },
+
+    /** The lot's own heading, without HiBid's "Lot # : 8590 - " prefix. */
+    title() {
+      const h = document.querySelector('app-lot-details .page-header h1, .page-header h1');
+      return h ? txt(h).replace(/^lot\s*#?\s*:?\s*[\w-]+\s*-\s*/i, '').trim() : '';
+    },
+
+    /**
+     * Blocks in the right-hand subpanel that our bottom box replaces.
+     *
+     * Returned as the direct children of the subpanel, so hiding them also
+     * hides the anonymous Bootstrap wrapper Angular put around them and no
+     * empty div is left behind in the bid strip.
+     */
+    relocatable() {
+      const sub = document.querySelector('app-lot-details-subpanel');
+      if (!sub) return [];
+      const out = [];
+      const add = (node) => {
+        let n = node;
+        while (n && n.parentElement && n.parentElement !== sub) n = n.parentElement;
+        if (n && n.parentElement === sub && out.indexOf(n) < 0) out.push(n);
+      };
+      sub.querySelectorAll('app-city-state-zip-link, app-auctioneer-info, app-share').forEach(add);
+      sub.querySelectorAll('.lot-auction-date-container').forEach(add);
+      return out;
+    },
+
+    /**
+     * URLs Angular already rendered.
+     *
+     * Read rather than reconstructed: the catalog and company paths carry ids
+     * we would otherwise have to guess, and reading them means the bottom box
+     * points at exactly what the original buttons pointed at.
+     */
+    pageLinks() {
+      const href = (sel) => {
+        const n = document.querySelector(sel);
+        const v = n ? n.getAttribute('href') : null;
+        return v || null;
+      };
+      // HiBid renders the auctioneer's e-mail address behind a tel: href, and
+      // some auctioneers put a phone number there instead. Sort it out by
+      // looking for an @ rather than trusting the scheme.
+      const contact = Array.from(document.querySelectorAll('app-auctioneer-info a[href^="tel:"], app-auctioneer-info a[href^="mailto:"]'))
+        .map((a) => (a.getAttribute('href') || '').replace(/^(?:tel|mailto):/i, '').trim())
+        .filter(Boolean);
+      return {
+        catalog: href('a[href*="/catalog/"]'),
+        company: href('app-company-page-link a, a[href*="/company/"]'),
+        maps: href('app-city-state-zip-link a'),
+        location: txt(document.querySelector('app-city-state-zip-link')) || null,
+        dates: txt(document.querySelector('.lot-auction-date-range')) || null,
+        auctioneer: txt(document.querySelector('app-company-page-link a')) || null,
+        email: contact.find((v) => v.indexOf('@') >= 0) || null,
+        phone: contact.find((v) => v.indexOf('@') < 0) || null,
+      };
     },
 
     currentBid() {
@@ -1534,6 +1987,19 @@
         cond: document.getElementById(`${NS}-cond`),
         verdict: document.getElementById(`${NS}-verdict`),
       };
+    },
+
+    /** The box that holds the gallery and the bid strip. */
+    lotContainer() {
+      return document.querySelector('.lot-details-container') ||
+             document.querySelector('app-lot-details .container') || null;
+    },
+
+    /** Last resort host for the bottom-of-page blocks. */
+    pageFoot() {
+      return document.querySelector('app-lot-details .container.lot-view') ||
+             document.querySelector('app-lot-details > div') ||
+             document.querySelector('app-lot-details') || null;
     },
   };
 
@@ -1634,6 +2100,396 @@
   }
 
   // ===========================================================================
+  // SECTION 12A — Light-card building blocks
+  // ===========================================================================
+
+  function tagNode({ label, value, tone }) {
+    return el('span', { class: `${NS}-tag ${NS}-tag-${tone || 'mute'}` }, [
+      el('i', { text: label }),
+      document.createTextNode(String(value)),
+    ]);
+  }
+
+  /** Label-over-value cells in an auto-fitting grid. */
+  function fillFacts(host, facts) {
+    if (!host) return;
+    host.textContent = '';
+    for (const f of facts) {
+      host.appendChild(el('div', { class: `${NS}-fact` }, [
+        el('span', { class: `${NS}-fact-k`, text: f.label }),
+        el('span', { class: `${NS}-fact-v`, text: String(f.value) }),
+      ]));
+    }
+  }
+
+  /** A collapsed disclosure. Long prose never gets to push the page around. */
+  function fold(summaryText, bodyNode) {
+    return el('details', { class: `${NS}-fold` }, [
+      el('summary', { text: summaryText }),
+      bodyNode,
+    ]);
+  }
+
+  function abtn(label, opts = {}) {
+    if (opts.onclick) {
+      return el('button', {
+        class: `${NS}-abtn${opts.primary ? ` ${NS}-abtn-primary` : ''}`,
+        type: 'button', text: label, onclick: opts.onclick,
+      });
+    }
+    if (!opts.href) return null;
+    return el('a', {
+      class: `${NS}-abtn${opts.primary ? ` ${NS}-abtn-primary` : ''}`,
+      href: opts.href, text: label,
+      target: opts.sameTab ? null : '_blank',
+      rel: opts.sameTab ? null : 'noopener noreferrer',
+    });
+  }
+
+  // ===========================================================================
+  // SECTION 12B — The redesigned lot-detail blocks
+  // ===========================================================================
+
+  /*
+   * Layout, applied by adding classes only.
+   *
+   * The reorder itself is CSS (see SECTION 10). This function exists to set the
+   * body class the CSS is scoped to, and to mark the blocks that our bottom box
+   * replaces. It never moves, replaces or removes a node Angular owns, so
+   * Angular's change detection keeps working on exactly the tree it rendered.
+   */
+  function applyDetailLayout(hasCard) {
+    if (!document.body) return;
+    document.body.classList.add(`${NS}-detail`);
+    document.body.classList.toggle(`${NS}-card-live`, !!hasCard);
+
+    for (const node of Detail.relocatable()) node.classList.add(`${NS}-relocated`);
+
+    hideAuctionBanner();
+
+    if (hasCard) {
+      const info = document.querySelector('app-information-panel');
+      const panel = info && info.closest('app-collapse-panel');
+      // Hidden, never removed: enhanceDetail still reads its table on every
+      // run, and textContent works perfectly well on a display:none subtree.
+      if (panel) panel.classList.add(`${NS}-relocated`);
+    }
+  }
+
+  /**
+   * Hide the auctioneer's banner image at the very top of the page.
+   *
+   * On an auctioneer subdomain the header slot holds a promotional banner the
+   * auctioneer uploaded — 172px tall on Encore, and there is no upper bound —
+   * so the first screenful of a lot page is an advertisement for the sale you
+   * are already looking at.
+   *
+   * The test is the rendered height, not the selector, because hibid.com's own
+   * wordmark sits in exactly the same slot and must survive: a rule that
+   * removed "the header image" would strip the site's identity on the main
+   * domain to solve a problem that only exists on the subdomains.
+   */
+  function hideAuctionBanner() {
+    const img = document.querySelector(
+      'app-top-header .logo-container img, app-top-header .navbar-brand img, .top-header .navbar-brand img');
+    if (!img) return;
+    const height = img.getBoundingClientRect().height;
+    // Already hidden by us: getBoundingClientRect is 0 and must not un-hide it.
+    if (img.classList.contains(`${NS}-hide-banner`)) return;
+    if (height <= 90) return;                       // a wordmark, not a banner
+    img.classList.add(`${NS}-hide-banner`);
+    const host = img.closest('.logo-container') || img.parentElement;
+    if (host) host.classList.add(`${NS}-hide-banner-host`);
+    Perf.count('auction banner hidden');
+  }
+
+  /**
+   * Undo the detail-page layout when we navigate to a catalog or search page.
+   *
+   * The blocks are removed, not just unstyled. Angular reuses the outer page
+   * container across routes, so the notices box appended at the bottom of a lot
+   * page survived the route change and reappeared under the catalog's lot grid,
+   * describing an auction the user had already left.
+   */
+  function clearDetailLayout() {
+    if (!document.body) return;
+    document.body.classList.remove(`${NS}-detail`, `${NS}-card-live`);
+    for (const id of [`${NS}-infocard`, `${NS}-auctionbox`, `${NS}-notices`]) {
+      const n = document.getElementById(id);
+      if (n) n.remove();
+    }
+  }
+
+  /**
+   * The Information box, rebuilt.
+   *
+   * Built as a stable skeleton with three replaceable regions, because the
+   * retail and bid cells inside it are owned by renderQuotes and re-rendered on
+   * a different clock: rebuilding the whole card when the GraphQL enrichment
+   * lands would throw away a retail price that had already arrived.
+   */
+  function infoCard() {
+    let root = document.getElementById(`${NS}-infocard`);
+    if (root && root.isConnected) return root;
+
+    const host = Detail.lotContainer();
+    if (!host) return null;
+
+    root = el('div', { class: `${NS}-card`, id: `${NS}-infocard` }, [
+      el('div', { class: `${NS}-card-head` }, [
+        el('span', { class: `${NS}-card-title`, text: 'Lot details' }),
+        el('span', { class: `${NS}-card-sub`, id: `${NS}-info-sub` }),
+      ]),
+      el('div', { class: `${NS}-card-body` }, [
+        el('div', { class: `${NS}-chips`, id: `${NS}-info-chips`, style: 'display:none;' }),
+        el('div', { class: `${NS}-facts`, id: `${NS}-info-facts` }),
+        el('div', { class: `${NS}-block` }, [
+          el('div', { class: `${NS}-block-title`, text: 'Retail (live)' }),
+          el('div', { id: `${NS}-retail-cell`, class: `${NS}-pricecell` }),
+        ]),
+        el('div', { class: `${NS}-block` }, [
+          el('div', { class: `${NS}-block-title`, text: 'Bid guidance' }),
+          el('div', { id: `${NS}-bid-cell`, class: `${NS}-pricecell` }),
+        ]),
+        el('div', { id: `${NS}-info-desc` }),
+      ]),
+    ]);
+
+    /*
+     * Placed as a sibling *before* the lot container, not inside it.
+     *
+     * Inside, it became the container's first child, and the layout CSS keys the
+     * gallery/bid row off `> .row:first-child` — so injecting the card silently
+     * stopped the reorder and left the bid strip drawn on top of the gallery.
+     * Outside, the DOM Angular owns keeps the shape its own selectors describe.
+     */
+    const outer = Detail.pageFoot();
+    if (outer && host.parentNode === outer) outer.insertBefore(root, host);
+    else host.insertBefore(root, host.firstChild);
+    return root;
+  }
+
+  /** Fill the card's replaceable regions. Safe to call repeatedly. */
+  function renderInfoCard(model) {
+    const root = infoCard();
+    if (!root) return null;
+
+    const sub = document.getElementById(`${NS}-info-sub`);
+    if (sub) {
+      sub.textContent = [model.eventName, model.auctioneer].filter(Boolean).join(' · ');
+    }
+
+    const chipHost = document.getElementById(`${NS}-info-chips`);
+    if (chipHost) {
+      chipHost.textContent = '';
+      const chips = conditionChips(model.description);
+      chipHost.style.display = chips.length ? '' : 'none';
+      for (const c of chips) chipHost.appendChild(tagNode(c));
+    }
+
+    fillFacts(document.getElementById(`${NS}-info-facts`), infoFacts(model));
+
+    const descHost = document.getElementById(`${NS}-info-desc`);
+    if (descHost) {
+      descHost.textContent = '';
+      // The structured fields are already chips above, so the disclosure holds
+      // only what the auctioneer actually wrote in prose.
+      const parsed = parseFields(model.description || '');
+      const prose = parsed.free || normalise(model.description || '').trim();
+      if (prose) {
+        descHost.appendChild(fold('Full description',
+          el('div', { class: `${NS}-fold-body`, text: prose })));
+      }
+    }
+    return root;
+  }
+
+  /**
+   * Where, when, and who — below the photos, as the user reads them.
+   *
+   * Rebuilt from scraped hrefs rather than by re-parenting HiBid's own buttons.
+   * Moving `app-share` would have been fewer lines, but it is an Angular
+   * component with its own click handler and lifecycle, and a userscript that
+   * re-parents those is a userscript that breaks on the next deploy.
+   */
+  function renderAuctionBox(links, auction) {
+    const host = Detail.lotContainer();
+    if (!host) return null;
+
+    let root = document.getElementById(`${NS}-auctionbox`);
+    if (!root || !root.isConnected) {
+      root = el('div', { class: `${NS}-card`, id: `${NS}-auctionbox` }, [
+        el('div', { class: `${NS}-card-head` }, [
+          el('span', { class: `${NS}-card-title`, text: 'Auction & auctioneer' }),
+          el('span', { class: `${NS}-card-sub`, id: `${NS}-auction-sub` }),
+        ]),
+        el('div', { class: `${NS}-card-body` }, [
+          el('div', { class: `${NS}-facts`, id: `${NS}-auction-facts` }),
+          el('div', { class: `${NS}-btns`, id: `${NS}-auction-btns` }),
+          el('div', { id: `${NS}-auction-extra` }),
+        ]),
+      ]);
+      // Immediately after the lot container — i.e. below the photos — and again
+      // outside it, so the container keeps exactly the children Angular expects.
+      const outer = Detail.pageFoot();
+      if (outer && host.parentNode === outer) outer.insertBefore(root, host.nextSibling);
+      else host.appendChild(root);
+    }
+
+    const a = auction || {};
+    const auctioneer = a.auctioneer || {};
+    const subNode = document.getElementById(`${NS}-auction-sub`);
+    if (subNode) subNode.textContent = a.eventName || '';
+
+    /*
+     * Location is the page's own city/state/zip, not the auctioneer record's
+     * address, and the two are genuinely different: OnDeals is registered at
+     * L8B 1X6 while lot 316725406 is picked up at L8E 5P4. Labelling the
+     * company's head office as "Location" would send someone to the wrong
+     * postcode, so the auctioneer's address is a separate row and only appears
+     * when it says something the location row does not.
+     */
+    const auctioneerAddress = formatAddress(auctioneer);
+    const location = links.location || auctioneerAddress;
+    const facts = [
+      { label: 'Location', value: location },
+      { label: 'Auctioneer', value: auctioneer.name || links.auctioneer },
+      // "23 Buchanan Crt, London, ON N5Z 4P9" against a location of
+      // "London, ON N5Z 4P9" is the same place with a street number, so the
+      // test is containment rather than equality.
+      { label: 'Auctioneer address',
+        value: (auctioneerAddress && location && auctioneerAddress.indexOf(location) < 0)
+          ? auctioneerAddress
+          : (auctioneerAddress && !location ? auctioneerAddress : null) },
+      { label: 'Bidding opens', value: fmtDateTime(a.bidOpenDateTime) },
+      { label: 'Bidding closes', value: fmtDateTime(a.bidCloseDateTime) },
+      // Only worth printing when GraphQL has not given us the exact times.
+      { label: 'Date(s)', value: (a.bidOpenDateTime || a.bidCloseDateTime) ? null : links.dates },
+      { label: 'E-mail', value: auctioneer.email || links.email },
+      { label: 'Phone', value: auctioneer.phone && auctioneer.phone.indexOf('@') < 0
+        ? auctioneer.phone : links.phone },
+    ].filter((f) => f.value != null && String(f.value).trim() !== '');
+
+    fillFacts(document.getElementById(`${NS}-auction-facts`), facts);
+
+    const btnHost = document.getElementById(`${NS}-auction-btns`);
+    if (btnHost) {
+      btnHost.textContent = '';
+      const email = auctioneer.email || links.email;
+      const buttons = [
+        abtn('📚 Full catalog', { href: links.catalog, primary: true, sameTab: true }),
+        abtn('🏛 Auctioneer page', { href: links.company, sameTab: true }),
+        abtn('📍 Map', { href: links.maps }),
+        email ? abtn('✉ E-mail auctioneer', { href: `mailto:${email}` }) : null,
+        abtn('🔗 Share lot', { onclick: shareLot }),
+      ].filter(Boolean);
+      for (const b of buttons) btnHost.appendChild(b);
+    }
+
+    const extra = document.getElementById(`${NS}-auction-extra`);
+    if (extra) {
+      extra.textContent = '';
+      const folds = [
+        ['Preview', a.previewDateInfo],
+        ['Pick-up & checkout', a.checkoutDateInfo],
+        ['Payment', a.paymentInfo],
+      ].filter(([, v]) => v && String(v).trim());
+      for (const [label, value] of folds) {
+        extra.appendChild(fold(label, el('div', { class: `${NS}-fold-body`, text: normalise(value).trim() })));
+      }
+    }
+    return root;
+  }
+
+  /**
+   * Share without borrowing HiBid's component: the Web Share sheet where the
+   * browser has one, the clipboard everywhere else. Both are best-effort — a
+   * rejected share (the user dismissed the sheet) is not an error worth showing.
+   */
+  function shareLot(ev) {
+    const btn = ev && ev.currentTarget;
+    const flash = (msg) => {
+      if (!btn) return;
+      const was = btn.textContent;
+      btn.textContent = msg;
+      setTimeout(() => { btn.textContent = was; }, 1600);
+    };
+    const url = location.href;
+    try {
+      if (navigator.share) {
+        navigator.share({ title: document.title, url }).catch(() => { /* dismissed */ });
+        return;
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(url).then(() => flash('✓ Link copied'), () => flash('Copy failed'));
+        return;
+      }
+      flash(url);
+    } catch (e) { flash('Copy failed'); }
+  }
+
+  /**
+   * Bidding / Auction notices, demoted to two links at the bottom.
+   *
+   * The original app-notice cards are hidden, never removed, and their body is
+   * cloned rather than moved. The clone keeps the auctioneer's links clickable,
+   * which a plain-text copy would not.
+   *
+   * `full` (from GraphQL) replaces the clone when it arrives, because the DOM
+   * copy is truncated: HiBid renders roughly the first 400 characters followed
+   * by a "Show More" anchor, and the rest of the text is simply not there.
+   */
+  function renderNoticeLinks(full) {
+    const notices = Array.from(document.querySelectorAll('app-notice'))
+      .filter((n) => txt(n));
+    if (!notices.length) return null;
+
+    const host = Detail.pageFoot();
+    if (!host) return null;
+
+    let root = document.getElementById(`${NS}-notices`);
+    if (!root || !root.isConnected) {
+      root = el('div', { class: `${NS}-notices`, id: `${NS}-notices` }, [
+        el('div', { class: `${NS}-notices-hint`, text: 'Auctioneer notices' }),
+      ]);
+      host.appendChild(root);
+    }
+
+    // Rebuilt wholesale: it is a couple of nodes, and the alternative is
+    // tracking which notice moved where across an Angular re-render.
+    root.textContent = '';
+    root.appendChild(el('div', { class: `${NS}-notices-hint`, text: 'Auctioneer notices' }));
+
+    notices.forEach((notice, i) => {
+      notice.classList.add(`${NS}-relocated`);
+      const parsed = splitNotice(txt(notice)) || { title: 'Notice', body: '' };
+      const title = txt(notice.querySelector('h1,h2,h3,h4')).replace(/:\s*$/, '') || parsed.title;
+
+      const key = /bidding/i.test(title) ? 'bidding' : /auction/i.test(title) ? 'auction' : null;
+      const fullText = key && full ? full[key] : null;
+
+      let body;
+      if (fullText) {
+        body = el('div', { class: `${NS}-notice-body`, style: 'white-space:pre-wrap;',
+          text: normalise(fullText).trim() });
+      } else {
+        // Clone the prose element so links survive; drop HiBid's "Show More"
+        // anchor, whose click handler does not come along with the clone.
+        const src = notice.querySelector('.card-header p') || notice.querySelector('p') || notice;
+        const clone = src.cloneNode(true);
+        clone.querySelectorAll('.notice-more, .notice-less').forEach((n) => n.remove());
+        body = el('div', { class: `${NS}-notice-body` }, [clone]);
+      }
+
+      root.appendChild(el('details', { class: `${NS}-notice`, id: `${NS}-notice-${i}` }, [
+        el('summary', { text: `⚠ ${title}` }),
+        body,
+      ]));
+    });
+    return root;
+  }
+
+  // ===========================================================================
   // SECTION 13 — Lot detail controller
   // ===========================================================================
 
@@ -1651,9 +2507,57 @@
    *                           enhanceDetail returns straight away; the pulse
    *                           loader shows while it is in flight and the affected
    *                           blocks re-render in place when it lands.
+   *   Pass 3 (asynchronous) — GraphQL enrichment of the information card and the
+   *                           auction box. Independent of pass 2 and equally
+   *                           optional: if it never lands, the DOM-derived
+   *                           version stays on screen.
    */
+
+  /*
+   * parseFees runs some forty regexes over the auction's entire boilerplate.
+   * That text is byte-identical for every lot in the sale and across every
+   * re-render Angular triggers, so the answer is memoised behind a cheap
+   * fingerprint (length plus the first 48 characters of each source) rather
+   * than recomputed. Hashing the full text would cost as much as the parse.
+   */
+  let FEE_MEMO = { key: null, value: null };
+
+  function feesFor(sources) {
+    const key = sources.map((s) => `${(s || '').length}:${(s || '').slice(0, 48)}`).join('|');
+    if (FEE_MEMO.key === key && FEE_MEMO.value) { Perf.count('fee memo hit'); return FEE_MEMO.value; }
+    const value = Perf.span('parseFees', () => parseFees(sources));
+    FEE_MEMO = { key, value };
+    return value;
+  }
+
   async function enhanceDetail() {
-    const rows = Detail.infoRows();
+    Perf.reset();
+    Detail.resetCache();
+
+    /*
+     * Clicking Next / Previous / First / Last in HiBid's lot pager is a router
+     * navigation: the URL changes immediately, the lot content a beat later.
+     * Enhancing inside that window pinned the previous lot's retail price and
+     * bid ceiling onto the new lot — and because run() then recorded the new
+     * path as done, the observer never came back to correct it.
+     *
+     * HiBid stamps the container with the lot id it actually rendered, so the
+     * mismatch is directly observable. Returning false leaves State.lastKey
+     * unset, which keeps the MutationObserver kicking until the DOM catches up.
+     *
+     * The guard only engages when that container exists, so a page or a site
+     * variant that does not stamp an id behaves exactly as it did before rather
+     * than losing the enhancement entirely.
+     */
+    const wantId = Detail.eventItemId();
+    const rendered = document.querySelector('[id^="lot-details-"]');
+    if (wantId && rendered && rendered.id !== `lot-details-${wantId}`) {
+      Perf.count('detail: DOM still on the previous lot');
+      log(`detail: URL is lot ${wantId} but the DOM still shows ${rendered.id}; waiting`);
+      return false;
+    }
+
+    const rows = Perf.span('infoRows', () => Detail.infoRows());
     if (!rows.description && !rows.lead) return false; // panel not rendered yet
 
     const lead = rows.lead ? rows.lead.text : '';
@@ -1671,7 +2575,7 @@
     const noticeText = txt(document.querySelector('app-notice'));
     const locationText = txt(document.querySelector('app-lot-details')) || document.body.innerText;
 
-    const fees = parseFees([termsText, payText, noticeText, locationText.slice(0, 4000)]);
+    const fees = feesFor([termsText, payText, noticeText, locationText.slice(0, 4000)]);
     const large = isLargeItem(`${lotText}\n${category}`);
     const increments = parseIncrements(Detail.panelText('Bid Increments'));
 
@@ -1717,20 +2621,48 @@
       ]));
     }
 
-    const cell = injectRetailRow(rows, product);
     const stated = extractStatedRetail(lead, description, estimateText);
     // Lets the providers reject candidates an order of magnitude too cheap.
     if (stated) product.statedRetail = stated.value;
+
+    // ---- the redesigned blocks, all from the DOM ---------------------------
+    //
+    // Order matters: the information card owns the retail and bid cells, so it
+    // has to be on the page before injectRetailRow goes looking for them. When
+    // it cannot be built (a markup change, a page we do not recognise) both
+    // fall back to inserting rows in HiBid's own table, exactly as before.
+    const links = Perf.span('page links', () => Detail.pageLinks());
+    const infoModel = {
+      lotNumber: rows['lot #'] ? rows['lot #'].text : null,
+      categoryText: category,
+      estimate: estimateText,
+      description,
+      model: product.model || null,
+      statedRetail: stated ? stated.value : null,
+      auctioneer: links.auctioneer,
+      eventName: null,
+    };
+
+    const card = Perf.span('info card', () => renderInfoCard(infoModel));
+    Perf.span('layout', () => applyDetailLayout(!!card));
+    Perf.span('auction box', () => renderAuctionBox(links, null));
+    Perf.span('notices', () => renderNoticeLinks(null));
+
+    const cell = injectRetailRow(rows, product);
 
     const ctx = {
       gen: ++State.gen,
       rows, host, cell, product, fees, large, increments,
       cond, current, next, stated,
+      links, infoModel, hasCard: !!card,
     };
 
     // Provisional render from the auctioneer's own figure — instant, and useful
     // on its own. Replaced in place if a live quote arrives.
-    renderQuotes(ctx, { quotes: [], errors: [], pending: CFG.autoLookup });
+    Perf.span('renderQuotes (pass 1)', () =>
+      renderQuotes(ctx, { quotes: [], errors: [], pending: CFG.autoLookup }));
+
+    Perf.report('detail pass 1');
 
     // ---- PASS 2: the live lookup, deliberately not awaited ---------------
     if (CFG.autoLookup) {
@@ -1744,7 +2676,105 @@
         .finally(() => Loader.hide());
     }
 
+    // ---- PASS 3: GraphQL enrichment, also not awaited --------------------
+    enrichDetail(ctx);
+
     return true;
+  }
+
+  /**
+   * Fill in what the lot page does not put in the DOM.
+   *
+   * Adds the category tree, the picture and bid counts, the auctioneer's postal
+   * address and e-mail, the exact open and close times, and the untruncated
+   * notices. HiBid renders roughly the first 400 characters of a notice followed
+   * by a "Show More" anchor and fetches the rest on demand, so the DOM copy is
+   * genuinely incomplete — GraphQL is the only way to show the whole thing
+   * without clicking.
+   *
+   * Fired without awaiting and guarded by the same generation counter as the
+   * retail lookup: if this is slow, fails, or the user has already navigated on,
+   * the DOM-derived card simply stays as it is.
+   */
+  /*
+   * One in-flight GraphQL pair per lot, shared.
+   *
+   * enhanceDetail legitimately runs more than once for a single lot — the
+   * initial kick and the first Angular re-render both land before State.lastKey
+   * is set — and each run was firing its own pair of requests for byte-identical
+   * answers. Memoising the promise rather than the result also means two runs
+   * that overlap join the same request instead of racing.
+   */
+  const DETAIL_GQL = { id: null, promise: null };
+
+  function detailData(id, catalogHref) {
+    if (DETAIL_GQL.id === id && DETAIL_GQL.promise) {
+      Perf.count('gql memo hit');
+      return DETAIL_GQL.promise;
+    }
+    DETAIL_GQL.id = id;
+    DETAIL_GQL.promise = (async () => {
+      /*
+       * The lot's auction id is in its GraphQL payload, but it is also already in
+       * the page's own Catalog link. Reading it from there turns a chain of two
+       * ~1.7s round trips into one, so the enrichment lands in half the time.
+       */
+      const known = parseAuctionId(catalogHref);
+      const lotP = GQL.lotDetail(id);
+      const auctionP = known ? GQL.auctionDetail(known) : null;
+
+      const lot = await Perf.spanAsync('gql lot', lotP);
+      if (auctionP) return { lot, auction: await Perf.spanAsync('gql auction (parallel)', auctionP) };
+
+      const chained = lot && lot.auction && lot.auction.id;
+      const auction = chained
+        ? await Perf.spanAsync('gql auction (chained)', GQL.auctionDetail(chained))
+        : null;
+      return { lot, auction };
+    })();
+    // A failure must not be cached as the answer for the rest of the visit.
+    DETAIL_GQL.promise.catch(() => { if (DETAIL_GQL.id === id) DETAIL_GQL.promise = null; });
+    return DETAIL_GQL.promise;
+  }
+
+  async function enrichDetail(ctx) {
+    if (!ctx.hasCard) return;             // nothing to enrich; table fallback is live
+    const id = Detail.eventItemId();
+    if (!id) return;
+
+    Loader.show();
+    try {
+      const { lot, auction } = await detailData(id, ctx.links.catalog);
+      if (ctx.gen !== State.gen) return;  // navigated on
+
+      Perf.span('enriched render', () => {
+        const lotState = (lot && lot.lotState) || {};
+        renderInfoCard(Object.assign({}, ctx.infoModel, {
+          lotNumber: (lot && lot.lotNumber) || ctx.infoModel.lotNumber,
+          estimate: (lot && lot.estimate) || ctx.infoModel.estimate,
+          description: (lot && lot.description) || ctx.infoModel.description,
+          category: lot ? lot.category : null,
+          quantity: lot ? lot.quantity : null,
+          pictureCount: lot ? lot.pictureCount : null,
+          shippingOffered: lot ? lot.shippingOffered : null,
+          bidCount: lotState.bidCount != null ? lotState.bidCount : null,
+          eventName: (auction && auction.eventName) ||
+                     (lot && lot.auction && lot.auction.eventName) || null,
+          auctioneer: (auction && auction.auctioneer && auction.auctioneer.name) ||
+                      ctx.infoModel.auctioneer,
+        }));
+        renderAuctionBox(ctx.links, auction);
+        if (auction) {
+          renderNoticeLinks({ bidding: auction.biddingNotice, auction: auction.auctionNotice });
+        }
+      });
+      Perf.report('detail + graphql');
+    } catch (e) {
+      // A missing field or a 500 must never cost the page its DOM-derived card.
+      warn('lot enrichment failed:', (e && e.message) || e);
+    } finally {
+      Loader.hide();
+    }
   }
 
   /**
@@ -2134,6 +3164,37 @@
         out.push(...results);
       }
       return out;
+    },
+
+    /*
+     * One lot, with the fields a detail page does not put in the DOM.
+     *
+     * Every field below was verified against the live endpoint by sending it and
+     * reading the error: introspection is blocked, but an unknown field is named
+     * in the response ("Cannot query field 'x' on type 'Lot'"). `category` is a
+     * leaf-first tree, and `bidAmount` is deliberately not used — on a lot with
+     * no bids it came back as 123.45 while lotState.highBid was 0.
+     */
+    async lotDetail(id) {
+      const query = 'query HesLotDetail($ids: [Int!], $pageNumber: Int!, $pageLength: Int!) {' +
+        ' lotSearch(input: {eventItemIds: $ids, status: ALL}, pageNumber: $pageNumber, pageLength: $pageLength) {' +
+        ' pagedResults { results { id lead description estimate lotNumber quantity pictureCount' +
+        ' shippingOffered category { id categoryName } auction { id eventName }' +
+        ' lotState { bidCount highBid minBid isClosed } } } } }';
+      const data = await GQL.post('HesLotDetail', query, { ids: [id], pageNumber: 1, pageLength: 1 });
+      const results = (((data || {}).lotSearch || {}).pagedResults || {}).results || [];
+      return results[0] || null;
+    },
+
+    /** The auction behind a lot: where, when, who, and the untruncated notices. */
+    async auctionDetail(auctionId) {
+      const query = 'query HesAuctionDetail($id: Int!) {' +
+        ' auction(id: $id) { id eventName bidOpenDateTime bidCloseDateTime' +
+        ' biddingNotice auctionNotice previewDateInfo checkoutDateInfo paymentInfo' +
+        ' currencyAbbreviation' +
+        ' auctioneer { id name address city state postalCode email phone } } }';
+      const data = await GQL.post('HesAuctionDetail', query, { id: auctionId });
+      return (data || {}).auction || null;
     },
 
     /** The auction's fee text. A catalog page never renders it. */
@@ -2648,6 +3709,10 @@
     }
     if (State.running) return;
     State.running = true;
+    // The detail layout is a body class; a catalog page must not inherit it.
+    if (kind !== 'detail') clearDetailLayout();
+    Detail.resetCache();
+    Perf.count(`run:${kind}`);
     try {
       const handler = PAGES[kind] || PAGES.other;
       const ok = await handler();
@@ -2661,12 +3726,32 @@
     }
   }
 
+  /**
+   * Throw away everything rendered for the lot we are navigating away from.
+   *
+   * Without this the previous lot's summary panel — its retail price, its bid
+   * ceiling — stays on screen against the new lot's photos until the next render
+   * lands. Bumping the generation counter also strands any lookup still in
+   * flight, so a late answer for the old lot cannot paint itself onto the new one.
+   */
+  function resetDetail() {
+    State.gen++;
+    for (const id of [`${NS}-cond`, `${NS}-verdict`]) {
+      const n = document.getElementById(id);
+      if (n) n.textContent = '';
+    }
+    for (const id of [`${NS}-infocard`, `${NS}-auctionbox`, `${NS}-notices`]) {
+      const n = document.getElementById(id);
+      if (n) n.remove();
+    }
+  }
+
   /** Angular swaps views without a page load; watch the URL and the DOM. */
   function watch() {
     /*
-     * Compare the whole path + query, not just the pathname. Catalog pagination
-     * is `?apage=112` — the pathname is identical from page 1 to page 200, so a
-     * pathname-only check meant nothing ever re-ran when you turned the page.
+     * Identity of the current view includes the query string: HiBid's pager and
+     * its catalog sorting both change it without touching the path, so a
+     * path-only check sat there doing nothing while you clicked through a sale.
      */
     let lastUrl = pageUrl();
     let debounce = null;
@@ -2676,17 +3761,42 @@
       debounce = setTimeout(() => run(reason), 400);
     };
 
-    setInterval(() => {
-      const now = pageUrl();
-      if (now !== lastUrl) {
-        lastUrl = now;
-        State.lastKey = null;
-        Catalog._done = null;   // new page of lots: re-price from scratch
-        kick('navigation');
-      }
-    }, 500);
+    const navigated = (reason) => {
+      if (pageUrl() === lastUrl) return;
+      lastUrl = pageUrl();
+      State.lastKey = null;
+      Catalog._done = null;              // a new lot list is a new set of tiles
+      if (pageKind() === 'detail') resetDetail();
+      Perf.count(`navigation:${reason}`);
+      kick(`navigation (${reason})`);
+    };
+
+    /*
+     * Angular routes with history.pushState, which fires no event of its own.
+     * Wrapping the two history methods turns a pager click into an immediate
+     * signal instead of up to 500ms of polling lag; the interval below stays as
+     * a backstop for anything that changes the URL by another route.
+     */
+    const hist = typeof history !== 'undefined' ? history : null;
+    for (const name of ['pushState', 'replaceState']) {
+      const original = hist && hist[name];
+      if (typeof original !== 'function') continue;
+      hist[name] = function patched() {
+        const r = original.apply(this, arguments);
+        try { navigated(name); } catch (e) { warn('navigation hook:', e); }
+        return r;
+      };
+    }
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+      window.addEventListener('popstate', () => navigated('popstate'));
+      window.addEventListener('hashchange', () => navigated('hashchange'));
+    }
+
+    setInterval(() => navigated('poll'), 500);
 
     const obs = new MutationObserver(() => {
+      Perf.count('mutation batches');
+      // pageUrl(), not pathname: pagination is a query-string change.
       const key = `${pageKind()}|${pageUrl()}`;
       if (State.lastKey === key) return;                 // already done
       const k = pageKind();
@@ -2745,6 +3855,8 @@
       assessCondition, isLargeItem, relevance, detectTax,
       modelMatches, looksLikeModel, compactTokens, priceFloor, isAccessoryListing,
       Providers, pickBest, lookupRetail,
+      parseLotId, parseAuctionId, splitNotice, conditionTone, conditionChips,
+      infoFacts, fmtDateTime, formatAddress, Perf,
       setHttp: (fn) => { HTTP = fn || gmHttp; },
       setConfig: (patch) => { CFG = Object.assign({}, CFG, patch); },
     };

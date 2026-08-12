@@ -24,8 +24,9 @@ what you are about to pay instead of a ceiling:
 | Feature | Detail |
 |---|---|
 | **Product identification** | Extracts the real product name from the lot description, stripping the `Retail $328.00 \|` prefix, the `****` separator and the auctioneer's `Notes:` block. Builds a tight search query (`Sony WF-1000XM5`), keeping capacity where it moves price (`CORSAIR Vengeance DDR5 32GB`). |
-| **Live retail price** | A **Retail (live)** row is injected directly beneath the auctioneer's **Estimate** row, with the price, the matched product title, a condition badge, and deep links — including a CamelCamelCamel price-history link for the exact ASIN. |
-| **Fee-aware bid ceiling** | A **Bid guidance** row shows `BID UP TO $X` — the highest hammer price whose all-in cost still clears your target discount — rounded down to a bid the site will actually accept. |
+| **Live retail price** | A **Retail (live)** block in the Lot details card, with the price, the matched product title, a condition badge, and deep links — including a CamelCamelCamel price-history link for the exact ASIN. Falls back to a row beneath the auctioneer's **Estimate** row if the card cannot be built. |
+| **Fee-aware bid ceiling** | A **Bid guidance** block shows `BID UP TO $X` — the highest hammer price whose all-in cost still clears your target discount — rounded down to a bid the site will actually accept. |
+| **Reordered page** | Lot details, watch and bid above the photos; location, dates, auctioneer and share/catalog buttons below them; the six accordions in a grid; the notices demoted to links at the foot. See [Lot detail page layout](#lot-detail-page-layout). |
 | **Summary panel** | One dark panel at the top of the page: the decision in 40px type, then a table of retail / next bid / fees & tax / **final cost** / max bid / walk-away. Styled from HiBid's own palette (brand blue `#266296`, near-black, their orange `#e65100`); money that leaves your pocket is orange. |
 | **Red bad-deal panel** | If the next required bid lands less than 25% under retail the panel turns red and the hero number becomes the final cost you are about to pay, not a ceiling. |
 | **Parts-only banner** | 💀 If the **lot's own** description says parts-only / broken / damaged / `Is Item Damaged? Yes`, a black-and-red banner goes above everything else, and **all retail comparison and bid advice is suppressed** — a working unit's price is not a valid comparison for a broken one. |
@@ -109,6 +110,247 @@ walk-away at **$156.00**.
 Tax is applied to the whole invoice (hammer + premium + fees), which is how
 Ontario auctioneers bill it.
 
+## Lot detail page layout
+
+HiBid's own lot page asks you to scroll past a promotional banner, a 600px photo
+and two full notice cards before reaching a single number you can act on, and
+then puts the lot's actual details in an accordion below the fold. The script
+reorders it around the question you came to answer.
+
+| Order | Block | Notes |
+|---|---|---|
+| 1 | Summary panel | The decision, unchanged: hero number, cost table, condition banners. |
+| 2 | Lot title | HiBid's own `<h1>`. |
+| 3 | **Lot details** card | Condition chips, the facts grid, **Retail (live)**, **Bid guidance**, and the description folded away. |
+| 4 | Watch / bid strip | HiBid's own watch control, high bid, time remaining and Bid button, on one row. |
+| 5 | Photos | The gallery, capped at 900px so a full-width column does not make it 1200px tall. |
+| 6 | **Auction & auctioneer** card | Location, dates, auctioneer, contact, and catalog / auctioneer / map / e-mail / share as buttons. |
+| 7 | Collapsible panels | HiBid's six accordions, in a responsive grid. |
+| 8 | Auctioneer notices | Two links; click to expand the full text. |
+
+![Redesigned lot detail page](docs/screenshot-detail-redesign.png)
+
+### Nothing Angular owns is moved
+
+Re-parenting a component out of an Angular template is how a userscript breaks on
+the next deploy. So the reorder is `flex-direction: column` plus `order` on the
+columns HiBid already rendered — its nodes stay exactly where its change
+detection expects them.
+
+The blocks that appear to move to the bottom box are not moved. The originals are
+hidden with `display: none` and the box is rebuilt from their own `href`s, read
+out of the DOM rather than guessed, so **Full catalog** and **Auctioneer page**
+point at exactly what HiBid's buttons pointed at. Share is the one replacement:
+it uses `navigator.share` where available and the clipboard elsewhere, because
+borrowing `app-share`'s click handler would mean depending on it.
+
+Hiding is deliberately done twice — a class set on each run, plus `:has()`
+selectors that survive an Angular re-render that replaces the nodes and takes the
+class with them. The `:has()` rules sit in their own declaration blocks so a
+browser without support loses those lines instead of the whole stylesheet.
+
+The **Information** accordion is hidden rather than emptied, because
+`enhanceDetail` still reads its table on every run — `textContent` works fine on
+a `display: none` subtree — and it is only hidden once the replacement card is
+actually on the page. If the card cannot be built, the **Retail (live)** and
+**Bid guidance** rows are inserted into HiBid's table exactly as before.
+
+### Notices become links
+
+The Bidding and Auction notices are two always-open cards, 230–250px of text
+above the lot's own details. They become two small links at the foot of the page.
+
+Expanding one shows **more** than the card did. HiBid renders roughly the first
+400 characters followed by a *Show More* anchor and fetches the rest on demand,
+so the DOM copy is genuinely incomplete: on lot 316725406 the Bidding Notice is
+447 characters in the page and 842 from `auction(id) { biddingNotice }`. The link
+opens the GraphQL text when it arrives and a clone of the truncated card until
+then — a clone, so the auctioneer's own links stay clickable.
+
+![Notices and folds expanded](docs/screenshot-detail-notices.png)
+
+### Pass 3 — GraphQL enrichment
+
+A third detached pass fills in what the lot page does not put in the DOM at all.
+Every field was verified against the live endpoint by sending it and reading the
+error, since introspection is blocked and an unknown field is named in the
+response:
+
+- `lotSearch(eventItemIds: [id])` → `quantity`, `pictureCount`, `shippingOffered`,
+  the `category` tree, and `lotState { bidCount minBid highBid }`.
+- `auction(id)` → `bidOpenDateTime`, `bidCloseDateTime`, `previewDateInfo`,
+  `checkoutDateInfo`, `paymentInfo`, the untruncated notices, and
+  `auctioneer { name address city state postalCode email phone }`.
+
+`bidAmount` exists on `Lot` and is **not** used: on a lot with no bids it came
+back as `123.45` while `lotState.highBid` was `0`.
+
+Like pass 2 this is fired without being awaited and guarded by the same
+generation counter, so a slow or failing call leaves the DOM-derived card on
+screen rather than an empty one.
+
+Two details worth knowing:
+
+- **Location is the page's, not the auctioneer record's.** They differ. OnDeals
+  is registered at L8B 1X6 while lot 316725406 is collected at L8E 5P4, so the
+  location row keeps HiBid's own city/state/zip and the auctioneer's postal
+  address is a separate row that only appears when it adds something.
+- **Timestamps are formatted as strings, not `Date`s.** The API returns
+  `2026-08-12T19:00:00` with no offset — it is already the auction's local wall
+  clock. `new Date()` would apply the viewer's timezone and reprint a 7:00 PM
+  close as 11:00 PM for anyone west of the auctioneer.
+
+### The auctioneer's banner
+
+On an auctioneer subdomain the header slot holds a promotional image the
+auctioneer uploaded — 172px on `encoreauctions.hibid.com`, with no upper bound —
+advertising the sale you are already looking at. It is hidden on lot pages.
+
+The test is the image's **rendered height**, not its selector: hibid.com's own
+wordmark sits in the same slot, and a rule that removed "the header image" would
+strip the site's identity on the main domain to fix a problem that only exists on
+the subdomains.
+
+### What this costs in page height
+
+Measured at 1280px on both reference lots, released version versus this one:
+
+| | encore lot 317094503 | hibid lot 316725406 |
+|---|---|---|
+| Collapsible panel stack | 330px → **90px** | 330px → **90px** |
+| Information accordion | 694px → 0 (hidden) | 686px → 0 (hidden) |
+| Notice cards | 251px → 0 (links) | 230px → 0 (links) |
+| `app-lot-details` total | 1720px → **2220px** | 1699px → **2257px** |
+| DOM nodes | 650 → 743 | 996 → 1083 |
+
+The accordion goal is met decisively and ~1,180px of always-on boilerplate leaves
+the flow, but **the content region is ~30% taller overall**, because the two new
+cards surface more than they replace: the auction and auctioneer details were
+previously only inside a collapsed accordion, and the retail and bid figures now
+sit above the photos instead of below them. Everything added is one screen from
+the top rather than three.
+
+The largest remaining duplication is deliberate: the **Bid guidance** block
+repeats the summary panel's table almost row for row. Both are kept because both
+are documented features; folding the block would reclaim about 115px.
+
+For comparison, the same lot before the redesign:
+[docs/screenshot-detail-before.png](docs/screenshot-detail-before.png). The other
+reference lot on the main domain, after:
+[docs/screenshot-detail-redesign-hibid.png](docs/screenshot-detail-redesign-hibid.png).
+
+### Narrow screens
+
+Both grids are `repeat(auto-fit, minmax(…))`, so the six accordions and the facts
+collapse to one column on their own, and the bid strip is a wrapping flex row
+rather than a fixed layout. Checked at 420px: single column throughout, no
+horizontal overflow.
+
+![Redesigned lot page at 420px](docs/screenshot-detail-mobile.png)
+
+## SPA navigation
+
+HiBid is an Angular app, so Next / Previous / First / Last in the lot pager is a
+router navigation, not a page load. Two things went wrong there.
+
+**The URL changes before the content does.** Enhancing in that window read the
+*previous* lot's rows and pinned its retail price and bid ceiling onto the new
+lot — and because the run then recorded the new path as done, the MutationObserver
+never came back to correct it. The enhancement appeared to stop working for the
+rest of the session.
+
+HiBid stamps the container with the lot id it actually rendered
+(`#lot-details-317094503`), so the mismatch is directly observable. When the URL
+and that id disagree the run declines, leaves its "done" marker unset, and the
+observer keeps kicking until the DOM catches up. The guard only engages when that
+container exists, so a page that does not stamp an id behaves as before rather
+than losing the enhancement entirely.
+
+**`pushState` fires no event.** Navigation was detected only by a 500ms poll of
+`location.pathname`, which missed anything that changed just the query string.
+The two history methods are now wrapped, `popstate` and `hashchange` are handled,
+and the poll remains as a backstop. On navigation the previous lot's panel, cards
+and notices are cleared immediately and the generation counter is bumped, so a
+late answer for the old lot cannot paint itself onto the new one.
+
+Verified on lot 316725406: a `pushState` to another lot id clears the summary
+panel, the info card and the auction box within 200ms; while the URL is ahead of
+the DOM no card is built from the stale rows; returning to the real URL
+re-renders the correct lot.
+
+## Measuring it
+
+A userscript running at `document-idle` inside someone else's Angular app is easy
+to make slow by accident and impossible to tune by feel, so every stage of the
+detail pass is timed. The last run is left on `window.__hesPerf`:
+
+```js
+__hesPerf
+// { tag: 'detail + graphql', total: 7.8,
+//   spans: [ {label:'infoRows', ms:0.1}, {label:'parseFees', ms:0.1}, … ],
+//   counters: { 'panel scan': 1, 'gql memo hit': 1, 'mutation batches': 1 },
+//   layout: { docHeightPx: 2385, domNodes: 743 } }
+```
+
+Recording is two clock reads and an array push per span, so it stays on; only the
+console summary is behind the `debug` setting.
+
+Measured on lot 317094503, 1280px viewport:
+
+| Span | ms |
+|---|---|
+| `infoRows` | 0.1 |
+| `parseFees` | 0.1 |
+| `page links` | 0.2 |
+| `info card` | 0.7 |
+| `layout` | 1.8 |
+| `auction box` | 0.3 |
+| `notices` | 0.2 |
+| `renderQuotes (pass 1)` | 1.5 |
+| **synchronous total** | **~8ms** |
+| `gql lot` / `gql auction` (detached) | 1,700–3,600 each |
+| `enriched render` | 2.9 |
+
+The synchronous pass is not where the time goes — the network is, and it is
+already detached. Three things were still worth fixing, and all three came out of
+these numbers:
+
+**Panel text was scanned three times per render.** `Detail.panel()` walked every
+`app-collapse-panel` and lower-cased its whole `textContent` to match a heading,
+and `enhanceDetail` asks for three different panels. Terms and Conditions alone is
+a few KB, so the entire auction boilerplate was scanned and lower-cased three
+times. Headings live in `.collapse-header`, which is a few words, so it now
+matches on that and caches the list for one run: the `panel scan` counter reads
+`1` instead of `3`.
+
+**The fee parser re-ran on identical text.** `parseFees` runs some forty regexes
+over the whole boilerplate, which is byte-identical for every lot in a sale and
+across every re-render. It is memoised on a cheap fingerprint — length plus the
+first 48 characters of each source — rather than a full hash, which would cost
+about as much as the parse.
+
+**GraphQL was fetched twice per lot and serially.** `enhanceDetail` legitimately
+runs more than once (the initial kick and the first Angular re-render both land
+before the "done" marker is set), and each run fired its own pair of requests for
+identical answers — visible as two `gql lot` spans of 1.7s and 2.8s in one report.
+The promise is now memoised per lot id, so overlapping runs join one request; the
+`gql memo hit` counter confirms it. And because the auction id is already in the
+page's own Catalog link, the auction query no longer waits for the lot query:
+`gql auction (parallel)` measured 0ms on hibid.com because it had already resolved
+by the time the lot query returned. Worst case the enrichment went from
+~3.4s of chained round trips to ~1.7s.
+
+### Not changed, and why
+
+The DOM copy of a notice is truncated at ~400 characters, so a fee stated only
+in the notice text — Encore's 2.4% card processing fee sits about 600 characters
+in — is invisible to `parseFees` today. The full text is available from
+`auction(id) { auctionNotice }`, which pass 3 already fetches. Feeding it to the
+fee parser would be a correctness improvement, and it was deliberately left out:
+it changes every ceiling on the page, and it would change them *after* the
+summary panel had already rendered. It belongs in a change that owns the money
+path, not in a layout change.
+
 ## Retail price sources
 
 There is **no free official API for Amazon.ca prices** — Amazon's Product
@@ -184,7 +426,7 @@ never sent anywhere except `api.keepa.com`.
 ## Tests
 
 ```bash
-node test/run-tests.mjs            # 126 assertions, no dependencies
+node test/run-tests.mjs            # 220 assertions, no dependencies
 
 npm install --no-save linkedom     # provides DOMParser for Node
 node test/run-provider-tests.mjs   # 29 assertions against real captured responses

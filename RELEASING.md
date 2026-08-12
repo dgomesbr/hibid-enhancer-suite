@@ -13,8 +13,8 @@ nobody.
 | Where | Example |
 |---|---|
 | `src/hibid-enhancer.user.js` → `// @version` | `0.4.0` |
-| `package.json` → `"version"` | `0.7.0` |
-| the git tag | `v0.7.0` |
+| `package.json` → `"version"` | `0.7.1` |
+| the git tag | `v0.7.1` |
 
 `npm test` fails if the first two disagree — that check exists precisely so a
 forgotten bump cannot become a silent non-release.
@@ -80,6 +80,7 @@ the parser fix so the suite keeps its teeth.
 
 | Version | Highlights |
 |---|---|
+| `v0.7.1` | Fixed pagination never re-running (it is a query-string change) and the tidy stylesheet leaking onto lot pages. Auction header box restructured. |
 | `v0.7.0` | Catalog decluttered: notices demoted to footer links, thumbnails/Watch removed, tiles 58% shorter. Fixed the deal dot being clipped out of sight. |
 | `v0.6.0` | Catalog: bracketed final price `(3.04)`, fee memoisation by price bucket, deduped concurrent lookups, fee text from every GraphQL field, and a visible marker when fees had to be guessed. |
 | `v0.5.1` | Reject component-part accessories (rear baffle, I/O shield, bracket) and anything under 30% of the auctioneer's stated retail. |

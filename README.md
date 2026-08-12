@@ -256,6 +256,29 @@ sets `loading="lazy"` on 101 of 104 images, and a lazy image inside a
 `display:none` subtree never enters the viewport, so the fetch never fires. No
 separate lazy-loading patch is needed.
 
+### Auction header box
+
+The header carried a marketing image, a 686-character blurb and a stack of
+mismatched controls — 336 px before you reached a single lot.
+
+![Auction header](docs/screenshot-catalog-header.png)
+
+- The promo image is hidden. With no product photos left on the page, a banner is
+  the only picture on it and earns nothing.
+- The blurb is clamped to three lines with a **Show more** toggle. HiBid ships an
+  `app-read-more` component but it renders fully expanded here (231 px).
+- The right-hand controls are equalised to one uniform pill each, 247 × 40 px.
+
+That last one needed care. The controls are not siblings: `app-auction-status` is
+a *wrapper* holding two badges inside `.mb-3` divs, so styling the wrapper as a
+single item produced exactly the mismatch it was meant to fix — heights
+`148/38/38/38/78/38`, widths `247/168/168/168/114/247`. The fix is to flatten
+every wrapper with `display: contents` so each real control becomes a direct flex
+child of the column, then style the controls.
+
+Header height drops from 336 px to 274 px, and the prose column takes the width
+freed by the image.
+
 ### How it stays fast
 
 100 lots would be 100 page fetches scraped from the DOM. Instead the module uses

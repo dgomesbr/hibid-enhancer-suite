@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HiBid Enhancer Suite
 // @namespace    https://github.com/dgomesbr/hibid-enhancer-suite
-// @version      0.7.0
+// @version      0.7.1
 // @description  Retail price lookup, fee-aware bid ceilings, and loud condition warnings on HiBid lot pages.
 // @author       dgomesbr
 // @license      MIT
@@ -1379,6 +1379,49 @@
     body.${NS}-tidy .lot-tile .watch-container{display:none !important;}
 
     .${NS}-hidden{display:none !important;}
+
+    /* ---- Auction header box --------------------------------------------- */
+    body.${NS}-tidy .${NS}-head-img{display:none !important;}
+    body.${NS}-tidy .${NS}-auction-head{align-items:flex-start;}
+    body.${NS}-tidy .${NS}-auction-main{padding-right:20px;}
+
+    /*
+     * Equalise the right-hand stack. The controls are not siblings: app-auction-status
+     * is a WRAPPER holding two badges inside .mb-3 divs, so styling the wrapper as
+     * a single item produced the mismatch it was meant to fix (heights
+     * 148/38/38/38/78/38, widths 247/168/168/168/114/247).
+     *
+     * Flatten every wrapper with display:contents so each real control becomes a
+     * direct flex child of the column, then give the controls one uniform pill.
+     */
+    body.${NS}-tidy .${NS}-auction-side{display:flex;flex-direction:column;gap:6px;}
+    body.${NS}-tidy .${NS}-auction-side app-auction-status,
+    body.${NS}-tidy .${NS}-auction-side app-shipping-type,
+    body.${NS}-tidy .${NS}-auction-side .${NS}-auction-actions,
+    body.${NS}-tidy .${NS}-auction-side .mb-3{display:contents !important;}
+
+    body.${NS}-tidy .${NS}-auction-side .auction-lot-badge,
+    body.${NS}-tidy .${NS}-auction-side .shipping-type-badge,
+    body.${NS}-tidy .${NS}-auction-side .auction-btn{
+      display:flex !important;align-items:center;gap:9px;width:100% !important;
+      box-sizing:border-box;min-height:40px;max-height:40px;margin:0 !important;
+      padding:9px 12px;border-radius:8px;font-size:14px;line-height:1.2;
+      justify-content:flex-start;text-align:left;white-space:nowrap;overflow:hidden;}
+
+    body.${NS}-tidy .${NS}-auction-side .auction-lot-badge,
+    body.${NS}-tidy .${NS}-auction-side .shipping-type-badge{
+      background:#f2f5f8;border:1px solid #dde4ea;color:#31414f;}
+    body.${NS}-tidy .${NS}-auction-side .auction-lot-badge.bid-open{
+      background:#e7f5ec;border-color:#b8e2c8;color:#175c33;font-weight:700;}
+
+    /* Clamp the blurb to three lines, click or button to expand. */
+    body.${NS}-tidy .${NS}-clamp{display:-webkit-box;-webkit-line-clamp:3;
+      -webkit-box-orient:vertical;overflow:hidden;}
+    body.${NS}-tidy .${NS}-clamp.${NS}-expanded{display:block;-webkit-line-clamp:unset;overflow:visible;}
+    body.${NS}-tidy .${NS}-more{background:none;border:0;padding:2px 0;margin-top:2px;
+      color:#266296;font-weight:600;font-size:13px;cursor:pointer;font-family:inherit;}
+    body.${NS}-tidy .${NS}-more:hover{text-decoration:underline;}
+
     .${NS}-auction-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;}
     .${NS}-auction-actions .${NS}-moved-btn{margin:0;flex:0 1 auto;}
     .${NS}-footer{margin:28px 0 12px;padding:14px 16px;border-radius:10px;
@@ -2407,6 +2450,57 @@
       Tidy.moveAuctionButtons();
       Tidy.demoteNotices();
       Tidy.hidePrint();
+      Tidy.auctionHeader();
+    },
+
+    /**
+     * The auction header box: a promo image column, a prose column and a stack
+     * of mismatched controls, 331px tall before you reach a single lot.
+     *
+     * The image goes (there are no product photos on the page any more, so a
+     * marketing banner is the only picture left and it earns nothing), the prose
+     * column takes the freed width, the right-hand controls are equalised, and
+     * the 686-character description is clamped to three lines with a toggle.
+     */
+    auctionHeader() {
+      const badge = document.querySelector('.auction-lot-badge');
+      const row = badge && badge.closest('.row');
+      if (!row || row.dataset[`${NS}Head`]) return;
+      row.dataset[`${NS}Head`] = '1';
+      row.classList.add(`${NS}-auction-head`);
+
+      const cols = Array.from(row.children);
+      const sideCol = badge.closest('[class*="col"]');
+      const imgCol = cols.find((c) => c !== sideCol && c.querySelector('app-thumbnail, img'));
+      if (imgCol) imgCol.classList.add(`${NS}-head-img`);
+      if (sideCol) sideCol.classList.add(`${NS}-auction-side`);
+      const midCol = cols.find((c) => c !== imgCol && c !== sideCol);
+      if (midCol) midCol.classList.add(`${NS}-auction-main`);
+
+      Tidy.clampDescription(row);
+    },
+
+    /**
+     * Clamp the auction blurb. HiBid ships an app-read-more component but it
+     * renders fully expanded here (231px), so clamp its inner element and give
+     * it an explicit toggle rather than leaving a wall of text above the lots.
+     */
+    clampDescription(row) {
+      const desc = row.querySelector('.read-more-inner') ||
+                   row.querySelector('app-read-more .text-pre-line');
+      if (!desc || desc.dataset[`${NS}Clamped`]) return;
+      desc.dataset[`${NS}Clamped`] = '1';
+      desc.classList.add(`${NS}-clamp`);
+
+      const toggle = el('button', {
+        class: `${NS}-more`, type: 'button', text: 'Show more',
+        onclick: (e) => {
+          e.preventDefault();
+          const open = desc.classList.toggle(`${NS}-expanded`);
+          toggle.textContent = open ? 'Show less' : 'Show more';
+        },
+      });
+      desc.insertAdjacentElement('afterend', toggle);
     },
 
     /**
@@ -2536,9 +2630,22 @@
     other: async () => true,
   };
 
+  /** Identity of the current view: pagination lives in the query string. */
+  const pageUrl = () => location.pathname + location.search;
+
   async function run(reason) {
     const kind = pageKind();
-    const key = `${kind}|${location.pathname}`;
+    const key = `${kind}|${pageUrl()}`;
+
+    /*
+     * The tidy stylesheet is scoped to a body class, and the body survives SPA
+     * navigation — so leaving a catalog page for a lot page would otherwise keep
+     * hiding thumbnails there, which is exactly how "no product images load"
+     * looked. Drop the class whenever the current view is not a lot list.
+     */
+    if (kind !== 'catalog' && kind !== 'search') {
+      document.body.classList.remove(`${NS}-tidy`);
+    }
     if (State.running) return;
     State.running = true;
     try {
@@ -2556,7 +2663,12 @@
 
   /** Angular swaps views without a page load; watch the URL and the DOM. */
   function watch() {
-    let lastPath = location.pathname;
+    /*
+     * Compare the whole path + query, not just the pathname. Catalog pagination
+     * is `?apage=112` — the pathname is identical from page 1 to page 200, so a
+     * pathname-only check meant nothing ever re-ran when you turned the page.
+     */
+    let lastUrl = pageUrl();
     let debounce = null;
 
     const kick = (reason) => {
@@ -2565,15 +2677,17 @@
     };
 
     setInterval(() => {
-      if (location.pathname !== lastPath) {
-        lastPath = location.pathname;
+      const now = pageUrl();
+      if (now !== lastUrl) {
+        lastUrl = now;
         State.lastKey = null;
+        Catalog._done = null;   // new page of lots: re-price from scratch
         kick('navigation');
       }
     }, 500);
 
     const obs = new MutationObserver(() => {
-      const key = `${pageKind()}|${location.pathname}`;
+      const key = `${pageKind()}|${pageUrl()}`;
       if (State.lastKey === key) return;                 // already done
       const k = pageKind();
       if (k === 'detail' && !document.querySelector('app-information-panel')) return;

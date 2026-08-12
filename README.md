@@ -217,6 +217,45 @@ On a catalog page (`/catalog/<id>`) every lot tile gets two additions:
 | ⚫ dark red | — | parts-only lot, not priced against a working unit |
 | ⚪ grey | — | no retail price found |
 
+### Decluttered tiles
+
+A catalog page spends its vertical space on things you read once and repeats
+per-lot furniture 100 times. Everything below is *hidden*, never deleted —
+Angular owns these nodes and will re-render them, so removal fights change
+detection and can blank a tile. Hiding is done in a stylesheet rather than inline
+styles for the same reason: an inline style set before a re-render is simply lost.
+Set `catalogTidy: false` to switch it all off.
+
+| Removed | Why |
+|---|---|
+| Bidding Notice, Auction Notice | Read once, cost a screenful every visit. Both become links in a footer block with the full text one click away. |
+| Lot thumbnails | You are comparing prices, not photos. Also the largest network saving on the page. |
+| Watch control | 100 copies of a control you use on one lot. |
+| Share and Print | Page furniture. Note the per-lot bid buttons also carry the class `print`, so matching that class alone would have removed the bid button from all 100 tiles. |
+| The word "Lot" before every number | `Lot 9712` → `9712`. |
+
+Auction Details and Registered / Register to Bid move up beside the auction's
+status badges, where they belong.
+
+![Decluttered catalog tiles](docs/screenshot-catalog-tiles.png)
+
+Measured on the 100-lot page:
+
+| | before | after |
+|---|---|---|
+| Tile height | 368 px | **155 px** (−58%) |
+| Page height | 10,516 px | **5,009 px** (−52%) |
+| Lot images requested | ~100 | **0** |
+
+Hiding the thumbnail alone was not enough: its column is a fixed 150 px and the
+tile body has `min-height: 296px`, so the tile stayed 368 px tall with a blank
+hole in it. The column is collapsed and the floor released as well.
+
+The zero image requests are a consequence rather than a trick — HiBid already
+sets `loading="lazy"` on 101 of 104 images, and a lazy image inside a
+`display:none` subtree never enters the viewport, so the fetch never fires. No
+separate lazy-loading patch is needed.
+
 ### How it stays fast
 
 100 lots would be 100 page fetches scraped from the DOM. Instead the module uses

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HiBid Enhancer Suite
 // @namespace    https://github.com/dgomesbr/hibid-enhancer-suite
-// @version      0.6.0
+// @version      0.7.0
 // @description  Retail price lookup, fee-aware bid ceilings, and loud condition warnings on HiBid lot pages.
 // @author       dgomesbr
 // @license      MIT
@@ -59,6 +59,7 @@
     // Behaviour
     autoLookup: true,      // look up retail automatically on page load
     catalogBatchSize: 6,   // lots priced concurrently on a catalog page (5-10)
+    catalogTidy: true,     // strip page/tile noise on catalog pages
     debug: false,
   };
 
@@ -1341,8 +1342,14 @@
     /* ---- Catalog tiles -------------------------------------------------- */
     .${NS}-final{color:#e65100;font-weight:800;white-space:nowrap;}
     .${NS}-final-est{border-bottom:1px dashed currentColor;cursor:help;opacity:.85;}
-    .${NS}-ind{display:inline-block;width:11px;height:11px;border-radius:50%;margin-left:7px;
-      vertical-align:middle;border:1px solid rgba(0,0,0,.28);cursor:help;flex:0 0 auto;}
+    /* 11px next to a truck icon was missed entirely in use: bigger, ringed, and
+       with a background on the base class so an unresolved dot is still visible. */
+    .${NS}-ind{display:inline-block;width:15px;height:15px;border-radius:50%;
+      margin:0 6px 0 2px;vertical-align:-2px;cursor:help;flex:0 0 auto;background:#b0bec5;
+      box-shadow:0 0 0 2px #fff,0 0 0 3px rgba(13,27,40,.30);}
+    /* Pinned like the truck icon, on the positioned ancestor that is not clipped. */
+    .${NS}-ind-abs{position:absolute;top:4px;right:1px;margin:0;z-index:3;}
+    .${NS}-ind-abs.${NS}-ind-shift{right:26px;}
     .${NS}-ind-green{background:#2e9e5b;}
     .${NS}-ind-yellow{background:#f4c20d;}
     .${NS}-ind-orange{background:#f97316;}
@@ -1350,6 +1357,39 @@
     .${NS}-ind-na{background:#b0bec5;}
     .${NS}-ind-parts{background:#4a1420;box-shadow:0 0 0 2px rgba(229,57,53,.55);}
     .${NS}-ind-pending{background:linear-gradient(45deg,#38bdf8,#a855f7);animation:${NS}-pulse 1.2s infinite;}
+
+    /* ---- Catalog chrome -------------------------------------------------
+       Hiding is done in CSS, not inline styles: Angular re-renders these nodes
+       constantly and an inline style set before a re-render is simply lost (the
+       share link reappeared exactly that way). A stylesheet rule cannot be
+       re-rendered away, and it costs no per-tile DOM writes. */
+    body.${NS}-tidy app-notice{display:none !important;}
+    body.${NS}-tidy a.share-link{display:none !important;}
+    body.${NS}-tidy app-lot-tile app-thumbnail,
+    body.${NS}-tidy .lot-tile app-thumbnail{display:none !important;}
+    /* Hiding the image alone leaves its reserved space behind: the thumbnail
+       column is a fixed 150px and the tile body has min-height:296px, so the
+       tile stayed 368px tall with a blank hole in it. Collapse the column and
+       release the floor, which is the whole point of removing the photo. */
+    body.${NS}-tidy app-lot-tile .lot-thumbnail-live-catalog,
+    body.${NS}-tidy .lot-tile .lot-thumbnail-live-catalog{display:none !important;}
+    body.${NS}-tidy app-lot-tile .lot-tile-content,
+    body.${NS}-tidy .lot-tile .lot-tile-content{min-height:0 !important;height:auto !important;}
+    body.${NS}-tidy app-lot-tile .watch-container,
+    body.${NS}-tidy .lot-tile .watch-container{display:none !important;}
+
+    .${NS}-hidden{display:none !important;}
+    .${NS}-auction-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;}
+    .${NS}-auction-actions .${NS}-moved-btn{margin:0;flex:0 1 auto;}
+    .${NS}-footer{margin:28px 0 12px;padding:14px 16px;border-radius:10px;
+      background:#f5f7f9;border:1px solid #dde4ea;font-family:Inter,system-ui,sans-serif;}
+    .${NS}-foot-title{font-size:12px;font-weight:800;letter-spacing:.9px;text-transform:uppercase;
+      color:#5b6f80;margin-bottom:6px;}
+    .${NS}-foot-note{margin:4px 0;}
+    .${NS}-foot-note>summary{cursor:pointer;color:#266296;font-weight:600;font-size:13.5px;}
+    .${NS}-foot-note>summary:hover{text-decoration:underline;}
+    .${NS}-foot-body{margin:6px 0 10px;font-size:13px;line-height:1.55;color:#31414f;
+      white-space:pre-wrap;max-height:340px;overflow:auto;}
 
     /* Floating pulse loader. Purely decorative: fixed, non-interactive, and it
        never gates rendering — the page and every DOM-derived block are already
@@ -2166,34 +2206,45 @@
       }
     },
 
-    /** Coloured dot immediately after the shipping icon. */
+    /**
+     * Coloured dot pinned beside the shipping icon.
+     *
+     * It has to be *positioned*, not merely inserted after the truck. The truck
+     * is `position:absolute; top:4px; right:0`, so putting the dot after it in
+     * DOM order drops it into normal flow below the title — measured at y=933,
+     * inside a container that ends at y=930 and has `overflow:hidden`. The dot
+     * was rendering correctly and being clipped out of sight every time.
+     *
+     * So it gets the truck's own treatment: absolute, attached to
+     * `.lot-lead-heading` (the positioned ancestor), which sits outside the
+     * overflow:hidden lead container and is therefore never clipped.
+     */
     setIndicator(tile, info) {
-      const host = tile.leadHost || tile.node;
-      if (!host) return;
+      const anchor = tile.node.querySelector('.lot-lead-heading') || tile.leadHost || tile.node;
+      if (!anchor) return;
 
-      let dot = host.querySelector(`.${NS}-ind`);
+      // Sit just left of the truck when there is one, otherwise take its place.
+      const base = `${NS}-ind ${NS}-ind-abs` + (tile.shipIcon ? ` ${NS}-ind-shift` : '');
+
+      let dot = tile.node.querySelector(`.${NS}-ind`);
       if (!dot) {
-        dot = el('span', { class: `${NS}-ind` });
-        if (tile.shipIcon && tile.shipIcon.parentNode) {
-          tile.shipIcon.insertAdjacentElement('afterend', dot);
-        } else {
-          host.appendChild(dot);
-        }
+        dot = el('span', { class: base });
+        anchor.appendChild(dot);
       }
 
       if (info.pending) {
-        dot.className = `${NS}-ind ${NS}-ind-pending`;
+        dot.className = `${base} ${NS}-ind-pending`;
         dot.title = 'HiBid Enhancer: checking retail price…';
         return;
       }
       if (info.partsOnly) {
-        dot.className = `${NS}-ind ${NS}-ind-parts`;
+        dot.className = `${base} ${NS}-ind-parts`;
         dot.title = '\u{1F480} Parts only — not priced against a working unit';
         return;
       }
 
       const ind = indicatorFor(info.ratio);
-      dot.className = `${NS}-ind ${NS}-ind-${ind.cls}`;
+      dot.className = `${base} ${NS}-ind-${ind.cls}`;
       dot.title = info.ratio == null
         ? `No retail price found — final cost ${info.cost ? money(info.cost.total) : '—'}`
         : `${pct(info.disc)} off retail (${ind.label})` +
@@ -2219,6 +2270,7 @@
 
       Loader.show();
       try {
+        Tidy.page();
         const auctionId = Catalog.auctionId();
         const ids = tiles.map((t) => t.id);
 
@@ -2279,6 +2331,7 @@
             cost = costByBucket.get(bucket);
           }
 
+          Tidy.tile(tile);
           Catalog.setFinal(tile, cost, feesEstimated);
           Catalog.setIndicator(tile, { pending: true });
 
@@ -2322,6 +2375,144 @@
       } finally {
         Loader.hide();
       }
+    },
+  };
+
+
+  // ===========================================================================
+  // SECTION 18 — Catalog chrome: strip noise, surface what matters
+  // ===========================================================================
+
+  /*
+   * A catalog page spends most of its vertical space on things you read once —
+   * two notice blocks, a share link, a print link — and repeats per-lot furniture
+   * 100 times: a thumbnail, a Watch control, the word "Lot" before every number.
+   * None of that helps you compare 100 lots, and all of it pushes the numbers
+   * that do below the fold.
+   *
+   * Everything here HIDES rather than removes. Angular owns these nodes and will
+   * re-render them; deleting them fights change detection and can blank a tile.
+   * Hiding is also reversible from the settings menu.
+   */
+  const Tidy = {
+    /** Page-level chrome. Runs once per page, idempotent. */
+    page() {
+      if (!CFG.catalogTidy) return;
+
+      // One class switch does all the static hiding; see the stylesheet.
+      document.body.classList.add(`${NS}-tidy`);
+
+      // These three genuinely need JS: moving nodes, copying notice text out
+      // before it is hidden, and identifying the icon-only print control.
+      Tidy.moveAuctionButtons();
+      Tidy.demoteNotices();
+      Tidy.hidePrint();
+    },
+
+    /**
+     * Auction Details / Registered buttons belong next to the auction's status,
+     * not floating in their own block.
+     */
+    moveAuctionButtons() {
+      const badge = document.querySelector('.auction-lot-badge');
+      if (!badge) return;
+      const strip = Tidy.ensure(badge.parentElement, `${NS}-auction-actions`, 'div');
+      if (!strip) return;
+
+      document.querySelectorAll('a.auction-btn').forEach((btn) => {
+        if (btn.closest(`.${NS}-auction-actions`)) return;      // already moved
+        if (!txt(btn)) return;                                   // icon-only (print)
+        btn.classList.add(`${NS}-moved-btn`);
+        strip.appendChild(btn);
+      });
+    },
+
+    /**
+     * The Bidding and Auction notices are read once and then cost a screenful on
+     * every visit. Collapse them to links at the foot of the page, keeping the
+     * full text one click away — hiding information outright would be worse than
+     * the clutter.
+     */
+    demoteNotices() {
+      const notices = Array.from(document.querySelectorAll('app-notice'))
+        .filter((n) => txt(n) && !n.dataset[`${NS}Demoted`]);
+      if (!notices.length) return;
+
+      const foot = Tidy.footer();
+      if (!foot) return;
+
+      for (const notice of notices) {
+        const raw = txt(notice);
+        const label = (raw.split('\n')[0] || 'Notice').replace(/:\s*$/, '').trim();
+        const body = raw.slice(label.length).replace(/^:\s*/, '').trim();
+
+        notice.dataset[`${NS}Demoted`] = '1';   // CSS hides it; this stops re-copying
+
+        foot.appendChild(el('details', { class: `${NS}-foot-note` }, [
+          el('summary', { text: label }),
+          el('div', { class: `${NS}-foot-body`, text: body }),
+        ]));
+      }
+    },
+
+    /**
+     * Share and Print are page furniture. Note the per-lot bid buttons also carry
+     * the class "print", so matching on that class alone would remove the bid
+     * button from all 100 tiles — target the auction-level controls only.
+     */
+    hidePrint() {
+      document.querySelectorAll('a.auction-btn').forEach((n) => {
+        if (n.classList.contains(`${NS}-moved-btn`)) return;
+        const label = `${txt(n)} ${n.getAttribute('title') || ''} ${n.getAttribute('aria-label') || ''}`;
+        if (!txt(n) || /print|share/i.test(label)) n.classList.add(`${NS}-hidden`);
+      });
+    },
+
+    /** Per-tile furniture: thumbnail, Watch control, the redundant "Lot" word. */
+    tile(tile) {
+      if (!CFG.catalogTidy) return;
+
+      /*
+       * The thumbnail and Watch control are hidden by the stylesheet, which also
+       * stops the images downloading: HiBid already sets loading="lazy" on 101 of
+       * 104 images, and a lazy image inside a display:none subtree never enters
+       * the viewport, so the fetch never fires. Measured: 0 lot images requested
+       * after enhancement, against ~100 without it.
+       */
+
+      // "Lot 9712" -> "9712". Only the text needs JS.
+      const numEl = tile.node.querySelector('.text-primary.fw-bold');
+      if (numEl && !numEl.dataset[`${NS}Trimmed`]) {
+        const m = txt(numEl).match(/^lot\s+(.+)$/i);
+        if (m) {
+          numEl.textContent = m[1];
+          numEl.dataset[`${NS}Trimmed`] = '1';
+        }
+      }
+    },
+
+    /** A single footer container for demoted content, created on demand. */
+    footer() {
+      let foot = document.getElementById(`${NS}-footer`);
+      if (foot) return foot;
+      const anchor = document.querySelector('app-lot-tile, .lot-tile');
+      const host = anchor ? (anchor.closest('.container, .row, main, body') || document.body) : document.body;
+      foot = el('div', { id: `${NS}-footer`, class: `${NS}-footer` }, [
+        el('div', { class: `${NS}-foot-title`, text: 'Auction notices' }),
+      ]);
+      host.appendChild(foot);
+      return foot;
+    },
+
+    /** Get-or-create a child container with a marker class. */
+    ensure(parent, cls, tag) {
+      if (!parent) return null;
+      let node = parent.querySelector(`.${cls}`);
+      if (!node) {
+        node = el(tag || 'div', { class: cls });
+        parent.appendChild(node);
+      }
+      return node;
     },
   };
 

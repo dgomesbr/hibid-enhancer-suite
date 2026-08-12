@@ -1337,50 +1337,64 @@
     /* ---- Summary panel -------------------------------------------------
        Palette lifted from HiBid: brand blue #266296, near-black #212529,
        their orange #e65100. Money leaving your pocket is orange. */
-    .${NS}-panel{--hes-blue:#266296;--hes-ink:#0d1b28;--hes-line:rgba(255,255,255,.13);
-      --hes-dim:#9db4c9;--hes-orange:#ff9a3c;
-      background:linear-gradient(160deg,#0d1b28 0%,#14283b 62%,#173352 100%);
-      color:#eaf2f9;border-radius:10px;padding:16px 18px 14px;margin:0 0 12px;
-      border-left:6px solid var(--hes-blue);
-      box-shadow:0 3px 14px rgba(13,27,40,.28);
-      font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;}
-    .${NS}-panel-good{border-left-color:#2e9e5b;}
-    .${NS}-panel-warn{border-left-color:var(--hes-orange);}
-    .${NS}-panel-bad{border-left-color:#e53935;
-      background:linear-gradient(160deg,#2a0f14 0%,#3b1419 60%,#4a1a1f 100%);}
-    .${NS}-panel-neutral{border-left-color:var(--hes-blue);}
+    /* ---- The decision, and the numbers under it -------------------------
+       One dark box for the max bid, then a light table for everything that
+       justifies it, both inside the single lot-details card. The dark box is
+       what makes the decision separable at a glance from its evidence. */
+    .${NS}-banners{margin:10px 0 4px;}
 
-    .${NS}-panel-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:2px;}
+    .${NS}-decision-wrap{--hes-blue:#266296;--hes-dim:#9db4c9;--hes-orange:#ff9a3c;
+      font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;}
+    /* Columns chosen to line up with the support table underneath, whose th is
+       32% and whose figure column is 22%, minus this box's own padding. */
+    .${NS}-decision{display:grid;grid-template-columns:minmax(96px,27%) minmax(96px,20%) 1fr;
+      align-items:center;gap:0 12px;
+      background:linear-gradient(160deg,#0d1b28 0%,#14283b 62%,#173352 100%);
+      color:#eaf2f9;border-radius:9px;padding:9px 14px;margin:0 0 10px;
+      border-left:6px solid var(--hes-blue);box-shadow:0 2px 10px rgba(13,27,40,.22);}
+    /* One column on a phone, where three would be three words wide each. */
+    @media (max-width:640px){
+      .${NS}-decision{grid-template-columns:1fr;gap:2px;}
+    }
+    .${NS}-decision-good{border-left-color:#2e9e5b;}
+    .${NS}-decision-warn{border-left-color:var(--hes-orange);}
+    .${NS}-decision-bad{border-left-color:#e53935;
+      background:linear-gradient(160deg,#2a0f14 0%,#3b1419 60%,#4a1a1f 100%);}
+    .${NS}-decision-neutral{border-left-color:var(--hes-blue);}
+
+    .${NS}-hero-label{font-size:11.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;
+      color:var(--hes-dim);line-height:1.25;}
+    .${NS}-hero-value{font-size:34px;line-height:1.05;font-weight:800;letter-spacing:-.5px;
+      color:var(--hes-orange);font-variant-numeric:tabular-nums;white-space:nowrap;}
+    .${NS}-decision-bad .${NS}-hero-value{color:#ff7043;}
+    .${NS}-decision-why{display:flex;flex-direction:column;gap:1px;min-width:0;}
     .${NS}-verdict{font-size:12px;font-weight:800;letter-spacing:1.1px;text-transform:uppercase;
       color:#cfe2f2;}
-    .${NS}-panel-good .${NS}-verdict{color:#7ee2a8;}
-    .${NS}-panel-warn .${NS}-verdict{color:var(--hes-orange);}
-    .${NS}-panel-bad .${NS}-verdict{color:#ff8a80;}
+    .${NS}-decision-good .${NS}-verdict{color:#7ee2a8;}
+    .${NS}-decision-warn .${NS}-verdict{color:var(--hes-orange);}
+    .${NS}-decision-bad .${NS}-verdict{color:#ff8a80;}
     .${NS}-panel-sub{font-size:12.5px;color:var(--hes-dim);}
+    .${NS}-decision code{background:rgba(255,255,255,.1);color:#e8f1f8;padding:0 4px;border-radius:3px;}
+    .${NS}-decision strong{color:#fff;}
 
-    .${NS}-hero{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin:2px 0 12px;}
-    .${NS}-hero-label{font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;
-      color:var(--hes-dim);}
-    .${NS}-hero-value{font-size:40px;line-height:1.05;font-weight:800;letter-spacing:-.5px;
-      color:var(--hes-orange);font-variant-numeric:tabular-nums;}
-    .${NS}-panel-bad .${NS}-hero-value{color:#ff7043;}
-
-    .${NS}-sumtable{width:100%;border-collapse:collapse;font-size:13.5px;}
-    .${NS}-sumtable th,.${NS}-sumtable td{padding:6px 10px 6px 0;text-align:left;vertical-align:baseline;
-      border-bottom:1px solid var(--hes-line);}
-    .${NS}-sumtable tr:last-child th,.${NS}-sumtable tr:last-child td{border-bottom:0;}
-    .${NS}-sumtable th{font-weight:600;color:var(--hes-dim);white-space:nowrap;width:34%;}
-    .${NS}-num{font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap;width:22%;color:#f4f9fd;}
-    .${NS}-num-accent{color:var(--hes-orange);font-size:16px;font-weight:800;}
-    .${NS}-tr-accent th{color:#e6f0f8;font-weight:800;text-transform:uppercase;letter-spacing:.6px;font-size:12px;}
-    .${NS}-sumtable .${NS}-note{color:var(--hes-dim);font-size:12.5px;white-space:normal;}
-    .${NS}-panel-notes{margin-top:10px;font-size:12.5px;color:var(--hes-dim);}
-    .${NS}-panel .${NS}-links{margin-top:12px;}
-    .${NS}-panel .${NS}-chip{background:rgba(255,255,255,.07);border-color:rgba(255,255,255,.22);
-      color:#dbe9f6;}
-    .${NS}-panel .${NS}-chip:hover{background:rgba(255,255,255,.16);border-color:#fff;}
-    .${NS}-panel code{background:rgba(255,255,255,.1);color:#e8f1f8;padding:0 4px;border-radius:3px;}
-    .${NS}-panel strong{color:#fff;}
+    /* The supporting table is light: it belongs to the card, not to the dark box. */
+    .${NS}-support{width:100%;border-collapse:collapse;font-size:13px;}
+    .${NS}-support th,.${NS}-support td{padding:4px 10px 4px 0;text-align:left;
+      vertical-align:baseline;border-bottom:1px solid #eef3f8;}
+    .${NS}-support tr:last-child th,.${NS}-support tr:last-child td{border-bottom:0;}
+    .${NS}-support th{font-weight:600;color:#6b7c8c;white-space:nowrap;width:32%;}
+    .${NS}-num{font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap;
+      width:22%;color:#16283b;}
+    .${NS}-num-accent{color:#e65100;font-size:15px;font-weight:800;}
+    .${NS}-tr-accent th{color:#16283b;font-weight:800;text-transform:uppercase;
+      letter-spacing:.5px;font-size:11.5px;}
+    .${NS}-support .${NS}-note{color:#7b8c9c;font-size:12px;white-space:normal;}
+    .${NS}-panel-notes{margin-top:8px;font-size:12px;color:#6b7c8c;}
+    .${NS}-decision-wrap .${NS}-links{margin:10px 0 2px;}
+    /* A rule between the decision and the detail that supports it. Scoped to the
+       non-empty case so a lot with no decision to show gets no stray line. */
+    .${NS}-card-body > #${NS}-decision:not(:empty){
+      padding-bottom:7px;margin-bottom:8px;border-bottom:1px solid #e5edf4;}
 
     /* Compact table reused inside the "Bid guidance" info row (light context). */
     .${NS}-mini{border-collapse:collapse;font-size:13px;margin:2px 0 4px;}
@@ -1539,6 +1553,11 @@
       color:#1d4a72;}
     .${NS}-card-sub{font-size:12px;color:#6b7c8c;overflow-wrap:anywhere;}
     .${NS}-card-body{padding:11px 14px 12px;}
+    /* The one box that carries the decision, so it earns the brand edge. */
+    .${NS}-card-lead{border-top:3px solid var(--hes-blue);margin-top:10px;}
+    /* The condition banners live inside it now; theirs is the only margin needed. */
+    .${NS}-card-body > #${NS}-cond:empty{display:none;}
+    .${NS}-card-body > #${NS}-cond .${NS}-banner{margin:0 0 10px;}
 
     .${NS}-facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:9px 20px;}
     .${NS}-fact{min-width:0;}
@@ -1657,6 +1676,48 @@
        under an identical set in the summary panel. Suppressed here only; on the
        table fallback they are the only copy on the page. */
     body.${NS}-detail.${NS}-card-live #${NS}-retail-cell > .${NS}-links{display:none;}
+
+    /* ---- Quietening the bid strip ---------------------------------------
+       Every rule here is a stylesheet rule rather than an inline style, and
+       every one is scoped to body.${NS}-detail. Angular re-renders this subtree
+       on every bid update and every countdown tick; an inline style set before
+       one of those is simply gone, which is how the share link kept coming back.
+       A rule cannot be re-rendered away.
+
+       Only the two text labels need JavaScript, because CSS cannot rewrite
+       text — see relabelBidLine. */
+
+    /* The filled or hollow star already says watching or not, and the control
+       keeps its aria-label, so the word is redundant. */
+    body.${NS}-detail .watch-container .watch-text,
+    body.${NS}-detail .unwatch-container .watch-text{display:none;}
+
+    /* Private notes are not part of deciding what to bid. */
+    body.${NS}-detail app-watch-notes{display:none;}
+
+    /* "Click Main Image for Fullscreen Mode" — the cursor already says so. */
+    body.${NS}-detail .lot-details-images-tip{display:none;}
+
+    /* "Your Max" and its amount wrapped onto two lines in the flex strip. */
+    body.${NS}-detail .lot-bid-max-container dt{white-space:nowrap;}
+    body.${NS}-detail .lot-bid-type-max{white-space:nowrap;}
+
+    /* Shipping keeps the truck and loses the words — visually. The text is
+       moved out of sight rather than removed from the accessibility tree, so a
+       screen reader still announces "Shipping Available" where a sighted user
+       sees only the icon. */
+    body.${NS}-detail .shipping .lot-shipping-available,
+    body.${NS}-detail .shipping-type-badge .shipping-type-text{
+      position:absolute!important;width:1px;height:1px;margin:-1px;padding:0;
+      overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0;}
+    body.${NS}-detail .shipping i.fa-truck{font-size:15px;}
+
+    /* "Max: 31.00 CAD" and its bracketed bid count on one line. The bid button's
+       container shares the .lot-bid-container class, hence the :not(). */
+    body.${NS}-detail app-lot-details-subpanel .lot-bid-container:not(.lot-tile-bid-container){
+      display:inline;}
+    body.${NS}-detail app-lot-details-subpanel app-bid-history-link{margin-left:3px;}
+    body.${NS}-detail app-lot-details-subpanel a.lot-bid-history{white-space:nowrap;}
 
     /* Six stacked accordions cost ~330px of header before a word is read.
        Two columns and a smaller header get that back. */
@@ -1888,6 +1949,39 @@
     return [x.address, cityLine].filter((s) => s && String(s).trim()).join(', ') || null;
   }
 
+  /**
+   * "High Bid: 31.00 CAD" -> "Max: 31.00 CAD".
+   *
+   * Only the label changes; the amount and its currency are passed through
+   * untouched, because this text is Angular's and it rewrites it on every live
+   * bid update. Surrounding whitespace is dropped — HiBid pads the label with it
+   * and the layout no longer depends on it.
+   *
+   * Returns null when there is nothing to do, which is what makes re-applying
+   * this on every mutation safe rather than a loop: the output never matches the
+   * input pattern, so the second pass is always a no-op.
+   */
+  function maxBidLabel(text) {
+    const t = String(text == null ? '' : text);
+    if (!t.trim()) return null;
+    const m = t.match(/^\s*(?:high\s*bid|current\s*bid|winning\s*bid)\s*:\s*([\s\S]*?)\s*$/i);
+    if (!m) return null;
+    return `Max: ${m[1]}`;
+  }
+
+  /**
+   * "13 Bids" -> "(13)", "1 Bid" -> "(1)".
+   *
+   * The count keeps its own element, so HiBid's bid-history handler survives —
+   * this rewrites the anchor's text, never the anchor.
+   */
+  function bidCountLabel(text) {
+    const t = String(text == null ? '' : text);
+    const m = t.match(/(\d[\d,]*)\s*bids?\b/i);
+    if (!m) return null;
+    return `(${m[1]})`;
+  }
+
   // ===========================================================================
   // SECTION 11 — DOM helpers for the lot detail page
   // ===========================================================================
@@ -2038,6 +2132,20 @@
      * parts-only warning above it.
      */
     bannerHost() {
+      /*
+       * The consolidated card owns both regions when it exists, so the callers
+       * that write condition banners and the decision need no idea which layout
+       * they are in — they still get {cond, verdict} and still just append.
+       */
+      const card = document.getElementById(`${NS}-infocard`);
+      if (card && card.isConnected) {
+        const cond = card.querySelector(`#${NS}-cond`);
+        const verdict = card.querySelector(`#${NS}-decision`);
+        if (cond && verdict) return { root: card, cond, verdict };
+      }
+
+      // Fallback only: no card could be built, so the banners get their own
+      // wrapper above the title, exactly as they did before consolidation.
       const anchor =
         document.querySelector('.lot-details-pager-swipe') ||
         document.querySelector('app-lot-details .page-header') ||
@@ -2047,7 +2155,7 @@
 
       let host = document.getElementById(`${NS}-banners`);
       if (!host) {
-        host = el('div', { id: `${NS}-banners`, style: 'margin:10px 0 4px;' }, [
+        host = el('div', { id: `${NS}-banners`, class: `${NS}-banners` }, [
           el('div', { id: `${NS}-cond` }),
           el('div', { id: `${NS}-verdict` }),
         ]);
@@ -2055,8 +2163,8 @@
       }
       return {
         root: host,
-        cond: document.getElementById(`${NS}-cond`),
-        verdict: document.getElementById(`${NS}-verdict`),
+        cond: host.querySelector(`#${NS}-cond`),
+        verdict: host.querySelector(`#${NS}-verdict`),
       };
     },
 
@@ -2122,16 +2230,23 @@
   }
 
   /**
-   * The summary panel: one dark card that answers "what do I bid, and what will
-   * it really cost me", with the decision as the largest thing on screen.
+   * The decision, and the numbers that support it.
+   *
+   * Two visually separate things in one block, which is the whole point: the max
+   * bid is a dark panel of its own, and the supporting table sits under it on the
+   * light card. Previously these were one dark panel at the top of the page while
+   * a second light card lower down repeated the same context — so the page said
+   * the same thing twice and the reader had to check whether the two agreed.
    *
    * Palette is taken from HiBid itself (brand blue #266296, near-black #212529,
    * their existing orange #e65100) so it reads as part of the site rather than
-   * a bolted-on widget. Money that leaves your pocket is orange; everything else
-   * is blue-grey.
+   * a bolted-on widget. Money that leaves your pocket is orange.
+   *
+   * The signature is unchanged from the panel this replaces, so every caller and
+   * every branch that decides what the hero number should be is untouched.
    */
   function summaryPanel({ tone, verdict, heroLabel, heroValue, heroNote, rows, notes, links }) {
-    const table = el('table', { class: `${NS}-sumtable` }, [
+    const table = el('table', { class: `${NS}-support` }, [
       el('tbody', {}, rows.filter(Boolean).map((r) => el('tr', { class: r.accent ? `${NS}-tr-accent` : null }, [
         el('th', { text: r.label }),
         el('td', { class: `${NS}-num${r.accent ? ` ${NS}-num-accent` : ''}`, html: r.value }),
@@ -2139,14 +2254,20 @@
       ]))),
     ]);
 
-    return el('div', { class: `${NS}-panel ${NS}-panel-${tone}` }, [
-      el('div', { class: `${NS}-panel-head` }, [
-        el('span', { class: `${NS}-verdict`, text: verdict }),
-        heroNote ? el('span', { class: `${NS}-panel-sub`, html: heroNote }) : null,
-      ]),
-      el('div', { class: `${NS}-hero` }, [
+    /*
+     * Three columns, in the same order and roughly the same widths as the table
+     * below: label, figure, and why. Stacking the verdict under the figure left
+     * two thirds of the box empty, which on a 1280px page is a lot of nothing
+     * between the reader and the numbers.
+     */
+    return el('div', { class: `${NS}-decision-wrap` }, [
+      el('div', { class: `${NS}-decision ${NS}-decision-${tone}` }, [
         el('span', { class: `${NS}-hero-label`, text: heroLabel }),
         el('span', { class: `${NS}-hero-value`, text: heroValue }),
+        el('span', { class: `${NS}-decision-why` }, [
+          el('span', { class: `${NS}-verdict`, text: verdict }),
+          heroNote ? el('span', { class: `${NS}-panel-sub`, html: heroNote }) : null,
+        ]),
       ]),
       table,
       notes && notes.length
@@ -2244,6 +2365,15 @@
       // Hidden, never removed: enhanceDetail still reads its table on every
       // run, and textContent works perfectly well on a display:none subtree.
       if (panel) panel.classList.add(`${NS}-relocated`);
+
+      /*
+       * The card carries the condition banners and the decision now, so the
+       * standalone wrapper above the title is dead weight. It is one of ours, so
+       * removing it is safe — and leaving it would mean two elements sharing the
+       * id #hes-cond, which makes getElementById a coin toss.
+       */
+      const strays = document.getElementById(`${NS}-banners`);
+      if (strays) strays.remove();
     }
   }
 
@@ -2284,11 +2414,76 @@
    */
   function clearDetailLayout() {
     if (!document.body) return;
+    releaseChrome();
     document.body.classList.remove(`${NS}-detail`, `${NS}-card-live`);
-    for (const id of [`${NS}-infocard`, `${NS}-auctionbox`, `${NS}-notices`]) {
+    for (const id of [`${NS}-infocard`, `${NS}-auctionbox`, `${NS}-notices`, `${NS}-banners`]) {
       const n = document.getElementById(id);
       if (n) n.remove();
     }
+  }
+
+  /*
+   * Two labels in the bid strip that a stylesheet cannot reach.
+   *
+   * Everything else on this page is quietened with a CSS rule (SECTION 10),
+   * because a rule survives an Angular re-render and an inline style does not.
+   * These two are text, and CSS cannot rewrite text, so they need JavaScript —
+   * which means they need to survive the re-render some other way.
+   *
+   * That way is an observer on the subpanel plus strict idempotence: both
+   * helpers return null when the text is already what we want, so re-applying
+   * costs a regex and changes nothing. Our own writes therefore cannot feed the
+   * observer a second time, and no re-entrancy flag is needed.
+   *
+   * The observer is scoped to the subpanel rather than the document because the
+   * live bid, the countdown and the bid count all rewrite themselves there every
+   * few seconds, and this has to win every one of those races.
+   */
+  let CHROME_OBS = null;
+
+  function relabelBidLine() {
+    let changed = 0;
+
+    const high = document.querySelector('app-lot-details-subpanel .lot-high-bid');
+    if (high) {
+      const next = maxBidLabel(high.textContent);
+      if (next != null && next !== high.textContent) { high.textContent = next; changed++; }
+    }
+
+    const count = document.querySelector('app-lot-details-subpanel a.lot-bid-history');
+    if (count) {
+      const next = bidCountLabel(count.textContent);
+      if (next != null && next !== count.textContent) {
+        count.textContent = next;
+        // The visible text is now "(13)"; the accessible name must still say what
+        // it is and what clicking it does.
+        const n = next.replace(/[()]/g, '');
+        count.setAttribute('aria-label', `${n} bid${n === '1' ? '' : 's'} — bid history`);
+        count.setAttribute('title', 'Bid history');
+        changed++;
+      }
+    }
+    if (changed) Perf.count('bid line relabelled');
+    return changed;
+  }
+
+  /** Apply the label rewrites and keep them applied. */
+  function quietenChrome() {
+    relabelBidLine();
+
+    const sub = document.querySelector('app-lot-details-subpanel');
+    if (!sub || typeof MutationObserver !== 'function') return;
+    if (CHROME_OBS && CHROME_OBS.node === sub) return;   // already watching this one
+    if (CHROME_OBS) CHROME_OBS.obs.disconnect();
+
+    const obs = new MutationObserver(() => relabelBidLine());
+    obs.observe(sub, { childList: true, subtree: true, characterData: true });
+    CHROME_OBS = { node: sub, obs };
+  }
+
+  /** Stop watching when we leave the lot page. */
+  function releaseChrome() {
+    if (CHROME_OBS) { CHROME_OBS.obs.disconnect(); CHROME_OBS = null; }
   }
 
   /**
@@ -2310,7 +2505,8 @@
        * itself. Cheaper to check four ids than to debug that.
        */
       const complete = [`${NS}-info-facts`, `${NS}-info-chips`, `${NS}-info-desc`,
-        `${NS}-retail-cell`, `${NS}-bid-cell`, `${NS}-bid-title`]
+        `${NS}-retail-cell`, `${NS}-bid-cell`, `${NS}-bid-title`,
+        `${NS}-cond`, `${NS}-decision`]
         .every((id) => root.querySelector(`#${id}`));
       if (complete) return root;
       Perf.count('info card rebuilt (unrecognised skeleton)');
@@ -2320,12 +2516,19 @@
     const host = Detail.lotContainer();
     if (!host) return null;
 
-    root = el('div', { class: `${NS}-card`, id: `${NS}-infocard` }, [
+    root = el('div', { class: `${NS}-card ${NS}-card-lead`, id: `${NS}-infocard` }, [
       el('div', { class: `${NS}-card-head` }, [
         el('span', { class: `${NS}-card-title`, text: 'Lot details' }),
         el('span', { class: `${NS}-card-sub`, id: `${NS}-info-sub` }),
       ]),
       el('div', { class: `${NS}-card-body` }, [
+        /*
+         * Condition first, then the decision. A parts-only warning that appears
+         * below the max bid has already lost its argument, and the decision has
+         * to be the first number on the page — bottom line up front.
+         */
+        el('div', { id: `${NS}-cond` }),
+        el('div', { id: `${NS}-decision` }),
         el('div', { class: `${NS}-chips`, id: `${NS}-info-chips`, style: 'display:none;' }),
         el('div', { class: `${NS}-facts`, id: `${NS}-info-facts` }),
         el('div', { class: `${NS}-block` }, [
@@ -2334,7 +2537,7 @@
         ]),
         el('div', { class: `${NS}-block` }, [
           // "Bid guidance" while the block still holds the numbers; relabelled by
-          // injectBidRow to what is actually left once the summary panel above
+          // injectBidRow to what is actually left once the decision block above
           // has them.
           el('div', { class: `${NS}-block-title`, id: `${NS}-bid-title`, text: 'Bid guidance' }),
           el('div', { id: `${NS}-bid-cell`, class: `${NS}-pricecell` }),
@@ -2344,16 +2547,24 @@
     ]);
 
     /*
-     * Placed as a sibling *before* the lot container, not inside it.
+     * First thing in the lot view, above HiBid's own title.
      *
-     * Inside, it became the container's first child, and the layout CSS keys the
-     * gallery/bid row off `> .row:first-child` — so injecting the card silently
-     * stopped the reorder and left the bid strip drawn on top of the gallery.
-     * Outside, the DOM Angular owns keeps the shape its own selectors describe.
+     * It used to sit between the title and the gallery, with a separate dark
+     * panel above the title. Now that the two are one box there is only one
+     * sensible place for it: first, because it is the answer.
+     *
+     * Inserted as a sibling of the lot container rather than inside it — the
+     * layout CSS keys the gallery/bid row off `.lot-details-container > .row:
+     * first-child`, and making the card that first child silently stopped the
+     * reorder and drew the bid strip on top of the gallery.
      */
     const outer = Detail.pageFoot();
-    if (outer && host.parentNode === outer) outer.insertBefore(root, host);
-    else host.insertBefore(root, host.firstChild);
+    if (outer) {
+      const anchor = outer.querySelector('.lot-details-pager-swipe') || outer.firstChild;
+      outer.insertBefore(root, anchor);
+    } else {
+      host.insertBefore(root, host.firstChild);
+    }
     return root;
   }
 
@@ -2750,6 +2961,14 @@
     const next = Detail.nextBid() ||
       (current != null ? current + (incrementAt(current, increments) || 1) : null);
 
+    /*
+     * The card's skeleton first, because it now contains the condition-banner and
+     * decision regions that bannerHost() hands out. Only the skeleton: filling it
+     * needs the stated retail and the product model, which are computed below.
+     */
+    const card = Perf.span('info card', () => infoCard());
+    Perf.span('layout', () => applyDetailLayout(!!card));
+
     const host = Detail.bannerHost();
     if (!host) return false;
 
@@ -2806,10 +3025,10 @@
       eventName: null,
     };
 
-    const card = Perf.span('info card', () => renderInfoCard(infoModel));
-    Perf.span('layout', () => applyDetailLayout(!!card));
+    Perf.span('info card fill', () => renderInfoCard(infoModel));
     Perf.span('auction box', () => renderAuctionBox(links, null));
     Perf.span('notices', () => renderNoticeLinks(null));
+    Perf.span('chrome', () => quietenChrome());
 
     const cell = injectRetailRow(rows, product);
 
@@ -4012,11 +4231,14 @@
    */
   function resetDetail() {
     State.gen++;
-    for (const id of [`${NS}-cond`, `${NS}-verdict`]) {
+    // Emptied rather than removed: these two live inside the card on the normal
+    // path and inside #hes-banners on the fallback, and removing the card below
+    // takes the card's copies with it either way.
+    for (const id of [`${NS}-cond`, `${NS}-decision`, `${NS}-verdict`]) {
       const n = document.getElementById(id);
       if (n) n.textContent = '';
     }
-    for (const id of [`${NS}-infocard`, `${NS}-auctionbox`, `${NS}-notices`]) {
+    for (const id of [`${NS}-infocard`, `${NS}-auctionbox`, `${NS}-notices`, `${NS}-banners`]) {
       const n = document.getElementById(id);
       if (n) n.remove();
     }
@@ -4133,6 +4355,7 @@
       Providers, pickBest, lookupRetail,
       parseLotId, parseAuctionId, splitNotice, conditionTone, conditionChips,
       infoFacts, fmtDateTime, formatAddress, Perf, correctFees,
+      maxBidLabel, bidCountLabel,
       setHttp: (fn) => { HTTP = fn || gmHttp; },
       setConfig: (patch) => { CFG = Object.assign({}, CFG, patch); },
     };

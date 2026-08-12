@@ -10,14 +10,11 @@ highest hammer price that still beats retail after **buyer's premium + handling
 fees + HST**. It shouts at you when a lot is a bad deal, and shouts louder when
 the lot is broken.
 
-![Summary panel](docs/screenshot-summary.png)
+![The consolidated lot details card](docs/screenshot-bluf-card.png)
 
-![Injected pricing rows](docs/screenshot-info-rows.png)
-
-When the price is too close to retail the same panel turns red and leads with
-what you are about to pay instead of a ceiling:
-
-![Bad deal panel](docs/screenshot-summary-bad.png)
+Everything needed to decide is in that one box, and it is the first thing on the
+page. When the price is too close to retail the max-bid box turns red and leads
+with what you are about to pay instead of a ceiling.
 
 ## What it does on a lot detail page
 
@@ -25,10 +22,10 @@ what you are about to pay instead of a ceiling:
 |---|---|
 | **Product identification** | Extracts the real product name from the lot description, stripping the `Retail $328.00 \|` prefix, the `****` separator and the auctioneer's `Notes:` block. Builds a tight search query (`Sony WF-1000XM5`), keeping capacity where it moves price (`CORSAIR Vengeance DDR5 32GB`). |
 | **Live retail price** | A **Retail (live)** block in the Lot details card, with the price, the matched product title, a condition badge, and deep links — including a CamelCamelCamel price-history link for the exact ASIN. Falls back to a row beneath the auctioneer's **Estimate** row if the card cannot be built. |
-| **Fee-aware bid ceiling** | The highest hammer price whose all-in cost still clears your target discount, rounded down to a bid the site will actually accept. Shown in the summary panel, with the fee provenance in the Lot details card and a full **Bid guidance** table on the fallback path. |
-| **Reordered page** | Lot details, watch and bid above the photos; location, dates, auctioneer and share/catalog buttons below them; the six accordions in a grid; the notices demoted to links at the foot. See [Lot detail page layout](#lot-detail-page-layout). |
-| **Summary panel** | One dark panel at the top of the page: the decision in 40px type, then a table of retail / next bid / fees & tax / **final cost** / max bid / walk-away. Styled from HiBid's own palette (brand blue `#266296`, near-black, their orange `#e65100`); money that leaves your pocket is orange. |
-| **Red bad-deal panel** | If the next required bid lands less than 25% under retail the panel turns red and the hero number becomes the final cost you are about to pay, not a ceiling. |
+| **Fee-aware bid ceiling** | The highest hammer price whose all-in cost still clears your target discount, rounded down to a bid the site will actually accept. It is the max-bid box at the top of the card; the fee provenance sits lower down, and a full **Bid guidance** table appears on the fallback path. |
+| **One box, decision first** | A single card, first on the page: condition banners, the max bid in its own dark box, then retail / next bid / fees & tax / **final cost** / max bid / walk-away, the lot's facts, the retail match and the folds. Styled from HiBid's own palette (brand blue `#266296`, near-black, their orange `#e65100`); money that leaves your pocket is orange. |
+| **Reordered page** | The card, then the title, watch and bid, then the photos; location, dates, auctioneer and share/catalog buttons below them; the six accordions in a grid; the notices demoted to links at the foot. See [Lot detail page layout](#lot-detail-page-layout). |
+| **Red bad-deal tone** | If the next required bid lands less than 25% under retail the max-bid box turns red and the hero number becomes the final cost you are about to pay, not a ceiling. |
 | **Parts-only banner** | 💀 If the **lot's own** description says parts-only / broken / damaged / `Is Item Damaged? Yes`, a black-and-red banner goes above everything else, and **all retail comparison and bid advice is suppressed** — a working unit's price is not a valid comparison for a broken one. |
 | **Fee provenance** | Every fee is shown with the exact sentence it was parsed from, so a wrong number is traceable instead of magic. |
 | **Never blocks the page** | Two-pass rendering: everything derivable from the DOM appears instantly, the network lookup runs detached. A pulse loader in the top-right corner shows while it is in flight. |
@@ -119,16 +116,42 @@ reorders it around the question you came to answer.
 
 | Order | Block | Notes |
 |---|---|---|
-| 1 | Summary panel | The decision, unchanged: hero number, cost table, condition banners. |
+| 1 | **Lot details** card | Everything needed to decide, in one box. See below. |
 | 2 | Lot title | HiBid's own `<h1>`. |
-| 3 | **Lot details** card | Condition chips, the facts grid, **Retail (live)**, the fee provenance, and the description folded away. |
-| 4 | Watch / bid strip | HiBid's own watch control, high bid, time remaining and Bid button, on one row. |
-| 5 | Photos | The gallery, capped at 900px so a full-width column does not make it 1200px tall. |
-| 6 | **Auction & auctioneer** card | Location, dates, auctioneer, contact, and catalog / auctioneer / map / e-mail / share as buttons. |
-| 7 | Collapsible panels | HiBid's six accordions, in a responsive grid. |
-| 8 | Auctioneer notices | Two links; click to expand the full text. |
+| 3 | Watch / bid strip | HiBid's own watch star, `Max: … (n)`, time remaining, truck, Bid button, Your Max. |
+| 4 | Photos | The gallery, capped at 900px so a full-width column does not make it 1200px tall. |
+| 5 | **Auction & auctioneer** card | Location, dates, auctioneer, contact, and catalog / auctioneer / map / e-mail / share as buttons. |
+| 6 | Collapsible panels | HiBid's six accordions, in a responsive grid. |
+| 7 | Auctioneer notices | Two links; click to expand the full text. |
 
-![Redesigned lot detail page](docs/screenshot-detail-redesign.png)
+### One box, decision first
+
+There used to be two boxes: a dark summary panel above the title and a light Lot
+details card below it. Both carried the auction name, both carried the money, and
+the reader had to check whether the two agreed. They are now one card, and it is
+the first thing on the page — bottom line up front:
+
+| | |
+|---|---|
+| Condition banners | Parts-only / damaged / caution, when the lot's own description warrants one. First, because a warning printed under the max bid has already lost its argument. |
+| **Max bid** | Its own dark box, laid out as three columns in the same order and roughly the same widths as the table below it: what the figure is, the figure in 34px, and why. Stacking the verdict under the number left two thirds of the box empty. |
+| Supporting table | Retail, next bid, fees & tax, final cost, max bid, walk-away — on the light card, deliberately quieter than the box above it. |
+| Condition chips | The description's structured yes/no fields, colour-coded. |
+| Facts | Lot #, category, model, estimate, stated retail, photos, bids, shipping. |
+| **Retail (live)** | The matched product, its price, and where it came from. |
+| **Fees** | The provenance disclosure — every fee with the sentence it was parsed from. |
+| Full description | Folded away. |
+
+![The consolidated lot details card](docs/screenshot-bluf-card.png)
+
+The decision block is still `summaryPanel()`, with the same signature, so every
+branch that decides what the hero number should be — good deal, bad deal,
+parts-only, no retail price found — is untouched. Only its markup and palette
+changed: a dark box for the number, a light table for the evidence.
+
+`Detail.bannerHost()` now returns the two regions the card contains, so the code
+that writes condition banners and the decision has no idea which layout it is in.
+When no card can be built it still returns a wrapper above the title, as before.
 
 ### Nothing Angular owns is moved
 
@@ -211,53 +234,95 @@ wordmark sits in the same slot, and a rule that removed "the header image" would
 strip the site's identity on the main domain to fix a problem that only exists on
 the subdomains.
 
+### The bid strip
+
+HiBid's own subpanel stays where it is and keeps its own controls; six of its
+labels are quietened so the row reads at a glance.
+
+| | Before | After |
+|---|---|---|
+| Watch | ★ **Unwatch** | ★ — the filled or hollow star already says it, and the control keeps its `aria-label` |
+| Notes | *Click to add notes.* | gone — not part of deciding what to bid |
+| High bid | `High Bid: 31.00 CAD` + `13 Bids` on two lines | `Max: 31.00 CAD (13)` on one, the count still the bid-history link |
+| Shipping | 🚚 **Shipping Available** | 🚚 — the words move out of sight, not out of the accessibility tree |
+| Your Max | `Your Max` / `60.00 CAD` wrapped apart | `Your Max 60.00 CAD` on one line |
+| Gallery | *Click Main Image for Fullscreen Mode* | gone — the cursor already says so |
+
+![The quietened bid strip](docs/screenshot-bluf-bidstrip.png)
+
+Five of the six are one stylesheet rule each, scoped to `body.hes-detail`. That
+matters: Angular re-renders this subtree on every bid update and every countdown
+tick, and an inline style set before one of those is simply gone — which is how
+the catalog's share link kept coming back. A rule cannot be re-rendered away.
+
+The sixth is text, and CSS cannot rewrite text. `Max:` and `(13)` are applied by
+JavaScript from a `MutationObserver` scoped to the subpanel, because the live bid
+and the bid count rewrite themselves there every few seconds and the relabel has
+to win every one of those races. It is safe to run on every mutation because both
+helpers return `null` once the text is already correct, so our own writes cannot
+feed the observer a second time — no re-entrancy flag, no loop. The bracketed
+count keeps its anchor and gains an `aria-label` of "13 bids — bid history",
+because "(13)" on its own is not a usable accessible name.
+
 ### What this costs in page height
 
-Measured at 1280px on both reference lots, released version versus this one:
+Measured at 1280px, v0.9.0 versus this build, on two Encore lots, waiting each
+time until the released script had finished both its passes so "before" is the
+released layout and not a half-rendered one:
 
-| | encore lot 317094503 | hibid lot 316725406 |
+| | encore lot 317094078 | encore lot 317094503 |
 |---|---|---|
-| Collapsible panel stack | 330px → **90px** | 330px → **90px** |
-| Information accordion | 694px → 0 (hidden) | 686px → 0 (hidden) |
-| Notice cards | 251px → 0 (links) | 230px → 0 (links) |
-| `app-lot-details` total | 1720px → **2017px** | 1699px → **2119px** |
-| DOM nodes | 650 → 743 | 996 → 1083 |
+| Dark summary panel | 346px | gone (merged) |
+| Lot details card | 422px | 804px / 715px |
+| Max-bid box | — | 56px |
+| `app-lot-details` total | 2110px → **2044px** | 1998px → **1950px** |
+| Document | 2275px → **2209px** | 2163px → **2115px** |
 
-The accordion goal is met decisively and ~1,180px of always-on boilerplate leaves
-the flow, but **the content region is still ~20% taller overall**, because the two
-new cards surface more than they replace: the auction and auctioneer details were
-previously only inside a collapsed accordion, and the retail and bid figures now
-sit above the photos instead of below them. Everything added is one screen from
-the top rather than three.
+**Consolidation reclaims 66px and 48px — about 3%, not 30%.** That is worth saying
+plainly, because the brief hoped it would reverse the earlier growth and it does
+not. Two boxes became one, and what that recovers is chrome: a card border, two
+headers, the gap between them, and the dead space in the old stacked hero. It
+cannot recover content, and the content is where the height is — 56px of decision
+box, ~160px of supporting table, then chips, facts, the retail match and the folds.
+
+For scale, on hibid lot 316725406 the *unenhanced* page measures 1195px of
+`app-lot-details` against 2043px with this build. The enhancement is 70% of that
+lot's page, and almost all of it is figures that were not on the page at all.
+
+What would actually shorten it is folding something the reader usually does not
+need — the facts grid, or the supporting table once the max bid is trusted. That
+is a product decision about what a "fast decision" needs on screen, so it is
+flagged here rather than taken unilaterally.
 
 ### One set of numbers, not two
 
-The **Bid guidance** block used to repeat the summary panel's table almost row for
-row — max bid, walk away, next bid, fees & tax, final cost — a few hundred pixels
+The **Bid guidance** block used to repeat the decision's table almost row for row
+— max bid, walk away, next bid, fees & tax, final cost — a few hundred pixels
 below it. Two identical tables on one screen invite the reader to hunt for a
 difference that is not there, so inside the card the table is suppressed and the
-block keeps only what the panel does not carry: the fee provenance. It is
+block keeps only what the decision does not carry: the fee provenance. It is
 relabelled **Fees** when that happens. Worth 203px on the encore lot and 138px on
-hibid.com.
+hibid.com when it landed.
 
 The condition is the *absence of a next-bid amount*, not simply "is there a card":
-`renderQuotes` draws no panel at all when there is no bid to cost out, and in that
-case the table is the only place the ceiling appears, so it stays. The table also
-remains in full on the fallback path where HiBid's own information table is used.
+`renderQuotes` draws no decision block at all when there is no bid to cost out,
+and in that case the table is the only place the ceiling appears, so it stays. The
+table also remains in full on the fallback path that uses HiBid's own table.
 
-For comparison, the same lot before the redesign:
-[docs/screenshot-detail-before.png](docs/screenshot-detail-before.png). The other
-reference lot on the main domain, after:
-[docs/screenshot-detail-redesign-hibid.png](docs/screenshot-detail-redesign-hibid.png).
+For comparison, the same lot before this consolidation:
+[docs/screenshot-bluf-before.png](docs/screenshot-bluf-before.png), and the page
+as a whole after: [docs/screenshot-bluf-top.png](docs/screenshot-bluf-top.png).
 
 ### Narrow screens
 
 Both grids are `repeat(auto-fit, minmax(…))`, so the six accordions and the facts
 collapse to one column on their own, and the bid strip is a wrapping flex row
-rather than a fixed layout. Checked at 420px: single column throughout, no
-horizontal overflow.
+rather than a fixed layout. The max-bid box's three columns are the one place that
+needs an explicit `max-width: 640px` query, because three columns of two words are
+worse than three rows. Checked at 420px: single column throughout, no horizontal
+overflow.
 
-![Redesigned lot page at 420px](docs/screenshot-detail-mobile.png)
+![Redesigned lot page at 420px](docs/screenshot-bluf-mobile.png)
 
 ## SPA navigation
 
@@ -460,7 +525,7 @@ never sent anywhere except `api.keepa.com`.
 ## Tests
 
 ```bash
-node test/run-tests.mjs            # 252 assertions, no dependencies
+node test/run-tests.mjs            # 277 assertions, no dependencies
 
 npm install --no-save linkedom     # provides DOMParser for Node
 node test/run-provider-tests.mjs   # 33 assertions against real captured responses

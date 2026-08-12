@@ -841,5 +841,39 @@ H.correctFees(ctxD, { text: FULL_AUCTION_TEXT, rate: 25 });
 check('a rate is ignored when the text stated a premium', ctxD.fees.premiumPct, 16);
 
 // ===========================================================================
+console.log('\n13. Relabelling HiBid’s bid line');
+// ===========================================================================
+
+/*
+ * These two rewrites are applied from a MutationObserver, because Angular owns
+ * the text and rewrites it on every live bid update. That is only safe while both
+ * functions return null once the text is already correct: a function that kept
+ * "changing" its own output would feed the observer forever.
+ */
+check('the high-bid label becomes Max', H.maxBidLabel('High Bid: 31.00 CAD'), 'Max: 31.00 CAD');
+// HiBid pads this label with whitespace; the layout no longer needs it.
+check('surrounding whitespace is dropped',
+  H.maxBidLabel('  High Bid: 1.00 CAD '), 'Max: 1.00 CAD');
+check('"Current Bid" is the same label', H.maxBidLabel('Current Bid: 12.50 CAD'), 'Max: 12.50 CAD');
+check('"Winning Bid" too', H.maxBidLabel('Winning Bid: 99.00 USD'), 'Max: 99.00 USD');
+check('the amount and currency are never touched',
+  H.maxBidLabel('High Bid: 1,234.56 CAD'), 'Max: 1,234.56 CAD');
+
+// Idempotence is the property that makes the observer safe.
+check('already relabelled means nothing to do', H.maxBidLabel('Max: 31.00 CAD'), null);
+check('unrelated text is left alone', H.maxBidLabel('Shipping Available'), null);
+check('an empty label is nothing to do', H.maxBidLabel(''), null);
+check('no label at all', H.maxBidLabel(null), null);
+
+check('a plural bid count is bracketed', H.bidCountLabel('13 Bids'), '(13)');
+check('a single bid keeps its own count', H.bidCountLabel('1 Bid'), '(1)');
+check('zero bids is still a count', H.bidCountLabel('0 Bids'), '(0)');
+check('HiBid wraps the text in whitespace', H.bidCountLabel('\n    7 Bids\n'), '(7)');
+check('a thousand-separated count survives', H.bidCountLabel('1,024 Bids'), '(1,024)');
+check('already bracketed means nothing to do', H.bidCountLabel('(13)'), null);
+check('text with no count is left alone', H.bidCountLabel('Bid History'), null);
+check('no count text at all', H.bidCountLabel(undefined), null);
+
+// ===========================================================================
 console.log(`\n${pass + fail} assertions: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

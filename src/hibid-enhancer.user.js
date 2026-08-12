@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HiBid Enhancer Suite
 // @namespace    https://github.com/dgomesbr/hibid-enhancer-suite
-// @version      0.7.1
+// @version      0.8.0
 // @description  Retail price lookup, fee-aware bid ceilings, and loud condition warnings on HiBid lot pages.
 // @author       dgomesbr
 // @license      MIT
@@ -858,8 +858,11 @@
    * MSI B550M PRO-VDH" matches the brand and the model perfectly and costs $15,
    * so it will happily pose as the retail price of a $120 motherboard.
    */
-  const ACCESSORY_NOUN_RE = /\b(case|cover|sleeve|skin|pouch|protector|tips|eartips|cable|charger|adapter|mount|holder|stand|strap|band|bumper|shell|film|dock|lanyard|clip|baffle|shield|backplate|back\s*plate|faceplate|bracket|standoffs?|screws?|screw\s*kit|thermal\s*pad|riser|extender|gasket|grommet|spacer|shroud|bezel|decal|sticker|manual)\b/i;
+  const ACCESSORY_NOUN_RE = /\b(case|cover|sleeve|skin|pouch|protector|tips|eartips|cable|charger|adapter|mount|holder|stand|strap|band|bumper|shell|film|dock|lanyard|clip|baffle|shield|backplate|back\s*plate|faceplate|bracket|standoffs?|screws?|screw\s*kit|thermal\s*pad|riser|extender|gasket|grommet|spacer|shroud|bezel|decal|sticker|manual|module|chip|header|jumper|ribbon|harness|insert)\b/i;
   const ACCESSORY_MARKER_RE = /\b(compatible\s+with|replacement\s+for|designed\s+for|made\s+for|for\s+use\s+with|fits\s+(?:the\s+)?[A-Z0-9])/i;
+  /** "…for <this product>" — the marker verbs, without the noun requirement. */
+  const FOR_PRODUCT_VERBS = 'compatible\\s+with|replacement\\s+(?:part\\s+)?for|designed\\s+for' +
+    '|made\\s+for|for\\s+use\\s+with|fits|suitable\\s+for|upgrade\\s+for';
   /** Retailer condition prefixes that sit in front of the real brand. */
   const TITLE_PREFIX_RE = /^\s*(?:\(?\s*(?:open\s*box|openbox|refurbished|refurb|renewed|used|pre[\s-]?owned)[^-|:]*\)?\s*[-–|:]\s*)+/i;
   const USED_RE = /\b(open box|openbox|refurbished|refurb|renewed|pre[\s-]?owned|used|for parts)\b/i;
@@ -880,12 +883,35 @@
    */
   function isAccessoryListing(title, product) {
     const t = String(title || '');
+
+    /*
+     * Signal 0, and the strongest: the listing says it is FOR this product.
+     *
+     * "IFIXAI TPM 2.0 Module SPI 12PIN ... Replacement for MSI B550M PRO-VDH" is
+     * a $48 TPM chip, not a $120 motherboard, and it got through because this
+     * function used to demand an accessory noun before it would even look at the
+     * marker — and "Module" was not on the noun list. It never will be complete.
+     * A listing that names this product as its target is an accessory whatever
+     * noun it happens to use, so no noun is required here.
+     *
+     * The verbs alone would be too loose — "Designed for Gaming" is a motherboard
+     * feature — so the verb must be followed, within a few words, by this
+     * product's own brand or model.
+     */
+    const ident = [product.brand, product.model, product.model2]
+      .filter(Boolean)
+      .map((x) => escapeRe(x).replace(/[-\s]/g, '[-\\s]?'))
+      .join('|');
+    if (ident) {
+      const forProduct = new RegExp(
+        `\\b(?:${FOR_PRODUCT_VERBS})\\s+(?:the\\s+)?[^,;.]{0,40}?(?:${ident})`, 'i');
+      if (forProduct.test(t)) return true;
+    }
+
     const noun = ACCESSORY_NOUN_RE.exec(t);
     if (!noun) return false;
 
-    // Signal 1 — an explicit "for / designed for / compatible with" marker.
-    // Catches "Spigen Rugged Armor Designed for Sony WF-1000XM5 Case", where
-    // the accessory noun sits AFTER the model and so defeats word order alone.
+    // Signal 1 — a bare marker alongside an accessory noun.
     if (ACCESSORY_MARKER_RE.test(t)) return true;
 
     // Signal 2 — a different brand sells the accessory. A genuine listing leads

@@ -350,6 +350,31 @@ for (const bad of [
 truthy('the real motherboard still scores',
   H.relevance('MSI B550M PRO-VDH WIFI Micro-ATX LGA AM4 DDR4 Motherboard for AMD Ryzen', mbLot) > 0);
 
+/*
+ * "…for <this product>" must disqualify a listing on its own, with no accessory
+ * noun required. Reported from the wild: a $47.84 TPM module matched an MSI
+ * B550M PRO-VDH because the rule demanded a noun first and "Module" was not on
+ * the noun list — a list that will never be complete.
+ */
+for (const bad of [
+  'IFIXAI TPM 2.0 Module SPI 12PIN Module SLB9670 Replacement for MSI B550M PRO-VDH WiFi',
+  'Upgrade for MSI B550M PRO-VDH WiFi Wireless Card',
+  'Suitable for MSI B550M PRO-VDH SATA Ribbon',
+  'Compatible with MSI B550M PRO-VDH Rear Panel',
+]) {
+  check(`"for <product>" rejected without a noun: ${bad.slice(0, 34)}…`, H.relevance(bad, mbLot), 0);
+}
+
+// ...but the verbs alone must not disqualify a genuine listing. "Designed for
+// gaming" and "for AMD Ryzen" are features of the board, not signs of a part.
+for (const good of [
+  'MSI B550M PRO-VDH WiFi Motherboard Designed for Gaming and Content Creation',
+  'MSI B550M PRO-VDH WIFI Micro-ATX Motherboard for AMD Ryzen 5000 Series',
+  'MSI B550M PRO-VDH WiFi AM4 Motherboard, suitable for first-time builders',
+]) {
+  truthy(`genuine listing kept: ${good.slice(0, 34)}…`, H.relevance(good, mbLot) > 0);
+}
+
 // The price floor: a second, category-agnostic defence. Accessories are always
 // dramatically cheaper than the item, so anything under 30% of the auctioneer's
 // own stated retail is refused outright rather than reported as a bargain.

@@ -250,7 +250,8 @@ truthy('auction notice alone contains no parts-only trigger', !cNotice.partsOnly
 
 const c2 = H.assessCondition('MSI B650 MOTHERBOARD\nCondition: FOR PARTS ONLY\nIs Item Damaged? Yes');
 truthy('"FOR PARTS ONLY" detected', c2.partsOnly);
-truthy('reasons are reported', c2.partsReasons.length >= 2);
+truthy('the Condition value is given as the reason',
+  c2.partsReasons.some((r) => /FOR PARTS ONLY/i.test(r)));
 
 for (const [t, label] of [
   ['Screen is cracked', 'cracked'],
@@ -356,11 +357,88 @@ falsy('"Is Item Damaged? No" alone is not damage', H.assessCondition('Is Item Da
 falsy('"Missing Major Parts? No" alone is not damage', H.assessCondition('Missing Major Parts? No').partsOnly);
 falsy('"Is Item Functional? Yes" alone is not damage', H.assessCondition('Is Item Functional? Yes').partsOnly);
 // ...but the affirmative answers still must fire.
-truthy('"Is Item Damaged? Yes" IS damage', H.assessCondition('Is Item Damaged? Yes').partsOnly);
-truthy('"Missing Major Parts? Yes" IS damage', H.assessCondition('Missing Major Parts? Yes').partsOnly);
-truthy('"Is Item Functional? No" IS damage', H.assessCondition('Is Item Functional? No').partsOnly);
-truthy('"Condition: FOR PARTS ONLY" IS damage',
+/*
+ * Affirmative answers raise the DAMAGED severity — deliberately weaker than
+ * parts-only, because damaged goods still have value while scrap does not.
+ */
+truthy('"Is Item Damaged? Yes" is flagged damaged', H.assessCondition('Is Item Damaged? Yes').damaged);
+truthy('"Missing Major Parts? Yes" is flagged damaged', H.assessCondition('Missing Major Parts? Yes').damaged);
+truthy('"Is Item Functional? No" with corroboration is damaged',
+  H.assessCondition('Condition: HEAVILY USED\nIs Item Damaged? Yes\nIs Item Functional? No').damaged);
+truthy('"Condition: FOR PARTS ONLY" is parts-only',
   H.assessCondition('Condition: FOR PARTS ONLY\nIs Item Damaged? No').partsOnly);
+
+/*
+ * The N/A bug. "Is Item Functional? N/A" is the normal answer for anything that
+ * isn't a powered device. A `/^(no|n|false|none)\b/` test matched the "n" of
+ * "n/a" — the \b sits before the slash — so shampoo, toothpaste and drinking
+ * glasses marked "Condition: EXCELLENT" were reported non-functional and flagged
+ * parts-only. Measured on one catalog page: 54 of 100 lots were false positives.
+ */
+const NA_BLOCK = 'Condition: EXCELLENT\nIs Item Functional? N/A\nIs Item Damaged? No\nMissing Major Parts? No';
+falsy('"Is Item Functional? N/A" is not parts-only', H.assessCondition(NA_BLOCK).partsOnly);
+falsy('...nor damaged', H.assessCondition(NA_BLOCK).damaged);
+check('...and raises no cautions at all', H.assessCondition(NA_BLOCK).cautions, []);
+falsy('"Unable to Test" is not a fault either',
+  H.assessCondition('Condition: GOOD\nIs Item Functional? Unable to Test').partsOnly);
+falsy('"N/A" answers never imply damage',
+  H.assessCondition('Condition: GOOD\nIs Item Damaged? N/A\nMissing Major Parts? N/A').damaged);
+
+// A positive Condition downgrades a boolean flag to a caution: a short-count NEW
+// item is not scrap, and a skull banner there teaches the user to ignore skulls.
+const shortCount = H.assessCondition(
+  'Condition: NEW (ADJUSTED QUANTITY)\nMissing Major Parts? Yes\nMissing Parts Desc: One piece missing');
+falsy('short-count NEW item is not parts-only', shortCount.partsOnly);
+falsy('...and not damaged', shortCount.damaged);
+truthy('...but the missing piece is quoted as a caution',
+  shortCount.cautions.some((c) => /One piece missing/i.test(c)));
+
+// The auctioneer's own wording is surfaced verbatim — it is the most useful text
+// on the page when something is wrong. Note their field name is misspelled.
+const stained = H.assessCondition('Condition: FAIR\nIs Item Damaged? Yes\nDamage Desct: Fully stained');
+truthy('damaged severity set', stained.damaged);
+truthy('damage description quoted verbatim',
+  stained.damageReasons.some((r) => /Fully stained/.test(r)));
+
+/*
+ * CR-separated field blocks. This auctioneer joins description fields with a
+ * bare \r. parseFields split on /\r?\n/, so the whole block stayed one line, no
+ * fields parsed, and the keyword scan saw the raw labels — "Is Item Damaged?"
+ * contains "damaged" — flagging all 100 lots on the page as parts-only.
+ */
+const CR_BLOCK = 'Est. Retail Price: 67.00\rCondition: BRAND NEW - OPEN BOX\rModel: PH7G720000\r' +
+  'In packaging? Yes\rIs Item Functional? Yes\rIs Item Damaged? No\rMissing Major Parts? No';
+const crCond = H.assessCondition(CR_BLOCK);
+falsy('CR-separated block is not parts-only', crCond.partsOnly);
+check('CR-separated Condition parses', crCond.condition, 'BRAND NEW - OPEN BOX');
+const crProd = H.extractProduct('ESTEE LAUDER DOUBLE WEAR FOUNDATION', CR_BLOCK);
+falsy('CR-separated block does not leak field labels into the query',
+  /condition|packaging|functional|damaged|retail/i.test(crProd.query));
+check('CR-separated retail price parses',
+  H.extractStatedRetail('ESTEE LAUDER DOUBLE WEAR FOUNDATION', CR_BLOCK, '').value, 67);
+
+// Regression: lot 317094503. "Model: A-Series" is junk, and trusting it turned
+// the query into "MSI A-Series", which then matched an Intel LGA1851 board
+// because "aseries" is a substring of "Core Ultra Series 2".
+const msi = H.extractProduct('MSI B550M PRO-VDH WIFI MOTHERBOARD (AM4)',
+  'Est. Retail Price: 124.00\rCondition: EXCELLENT\rModel: A-Series\rIs Item Damaged? No');
+check('junk "Model:" value is rejected in favour of the title', msi.model, 'B550M');
+truthy('query is built from the real model', /B550M/.test(msi.query));
+falsy('query does not contain the junk model', /A-Series/i.test(msi.query));
+falsy('"A-Series" is not accepted as a model at all', H.looksLikeModel('A-Series'));
+truthy('a real model code is accepted', H.looksLikeModel('B550M'));
+
+// Boundary-aware model matching — the actual mis-match that was reported.
+falsy('"aseries" does not match inside "Core Ultra Series 2"',
+  H.modelMatches('MSI PRO Z890-S WiFi White ProSeries Motherboard (Core Ultra Series 2)', 'A-Series'));
+falsy('the wrong board scores zero for this lot',
+  H.relevance('MSI PRO Z890-S WiFi White ProSeries Motherboard (Support Core Ultra Series 2)', msi) > 0);
+truthy('the right board still scores',
+  H.relevance('MSI B550M PRO-VDH WiFi AM4 Micro-ATX Motherboard', msi) > 0);
+// Hyphen-insensitive matching must survive: retailers write it both ways.
+truthy('WF-1000XM5 matches a hyphenated title', H.modelMatches('Sony WF-1000XM5 Earbuds', 'WF-1000XM5'));
+truthy('WF-1000XM5 matches an unhyphenated title', H.modelMatches('Sony WF1000XM5 Earbuds', 'WF-1000XM5'));
+falsy('but not mid-token', H.modelMatches('Sony XWF1000XM5Z', 'WF-1000XM5'));
 
 // Bug 2 — the description is structured-only, so the product name and search
 // query came out empty and every retail link was unpopulated.

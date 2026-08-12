@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HiBid Enhancer Suite
 // @namespace    https://github.com/dgomesbr/hibid-enhancer-suite
-// @version      0.3.0
+// @version      0.4.0
 // @description  Retail price lookup, fee-aware bid ceilings, and loud condition warnings on HiBid lot pages.
 // @author       dgomesbr
 // @license      MIT
@@ -108,6 +108,13 @@
    */
   function normalise(s) {
     return String(s == null ? '' : s)
+      // Line endings first. Some auctioneers separate description fields with a
+      // bare CR: "Est. Retail Price: 67.00\rCondition: ...\rModel: ...". Splitting
+      // on /\r?\n/ then yields ONE line, no fields parse, and the keyword scan
+      // sees the raw labels — which flags every lot in the sale as parts-only.
+      // The DOM path hides this because innerText converts CR to a line break;
+      // the GraphQL payload does not.
+      .replace(/\r\n?/g, '\n')
       .replace(/[‘’ʼ′]/g, "'")
       .replace(/[“”]/g, '"')
       .replace(/[–—]/g, '-')
@@ -149,12 +156,23 @@
     return { fields, free: freeLines.join('\n').trim() };
   }
 
-  /** Yes/No answer of a structured field: true, false, or null if absent. */
+  /**
+   * Yes/No answer of a structured field: true, false, or null when the
+   * auctioneer did not actually answer.
+   *
+   * "N/A" is the common answer for anything that isn't a powered device, and it
+   * MUST come out as null. A previous `/^(no|n|false|none)\b/` read the "n" of
+   * "n/a" as "no" — the `\b` matches before the slash — so shampoo, toothpaste
+   * and drinking glasses marked "Condition: EXCELLENT" were reported as
+   * non-functional and flagged parts-only.
+   */
   function yesNo(value) {
     if (value == null) return null;
     const v = String(value).trim().toLowerCase();
-    if (/^(yes|y|true)\b/.test(v)) return true;
-    if (/^(no|n|false|none)\b/.test(v)) return false;
+    if (!v) return null;
+    if (/^(?:n\s*\/\s*a|n\.\s*a\.?|not\s*applicable|unknown|unspecified|unable|untested|not\s*tested|tbd|maybe|\?)/.test(v)) return null;
+    if (/^(?:y|yes|true|1)$/.test(v) || /^yes\b/.test(v)) return true;
+    if (/^(?:n|no|false|0|none)$/.test(v) || /^no\b/.test(v)) return false;
     return null;
   }
 
@@ -412,39 +430,95 @@
   /** Explicit positives that should suppress soft cautions. */
   const POSITIVE_RE = /\b(tested\s*(?:and\s*)?working|works?\s*(?:great|well|fine|perfectly)|fully\s*functional|brand\s*new|sealed|new\s*in\s*box|nib\b)/i;
 
+  /**
+   * Condition values that mean the item is only good for spares.
+   * The `Condition:` field is the auctioneer's own summary and is the primary
+   * signal — far more reliable than keyword-scanning prose.
+   */
+  const CONDITION_PARTS_RE = /\b(for\s*parts|parts\s*only|salvage|broken|not\s*working|non[\s-]*functional|defective|scrap|damaged\s*beyond)\b/i;
+
+  /** Condition values that assert the item is fine. These downgrade flags below. */
+  const CONDITION_GOOD_RE = /\b(brand\s*new|new|sealed|excellent|like\s*new|mint|open\s*box|good|very\s*good)\b/i;
+
   function assessCondition(lotText) {
     const { fields, free } = parseFields(lotText || '');
 
-    // Structured yes/no answers are authoritative — they are the auctioneer
-    // answering a direct question, not prose to be keyword-matched.
-    const damaged = yesNo(field(fields, 'is item damaged', 'item damaged', 'damaged'));
-    const missing = yesNo(field(fields, 'missing major parts', 'missing parts', 'missing any parts'));
-    const functional = yesNo(field(fields, 'is item functional', 'item functional', 'functional', 'working'));
+    const damagedFlag = yesNo(field(fields, 'is item damaged', 'item damaged', 'damaged'));
+    const missingFlag = yesNo(field(fields, 'missing major parts', 'missing parts', 'missing any parts'));
+    const functionalFlag = yesNo(field(fields, 'is item functional', 'item functional', 'functional', 'working'));
     const conditionText = field(fields, 'condition') || '';
+
+    // The auctioneer's own free-text explanations, which are the most useful
+    // thing on the page when something is wrong. Their field name is sometimes
+    // misspelled ("Damage Desct"), so match loosely.
+    const damageDesc = field(fields, 'damage desct', 'damage desc', 'damage description', 'damage details') || '';
+    const missingDesc = field(fields, 'missing parts desc', 'missing parts description', 'missing desc') || '';
     const notes = [field(fields, 'notes'), field(fields, 'note')].filter(Boolean).join(' ');
 
-    const parts = [];
-    if (damaged === true) parts.push('structured field: Is Item Damaged? = Yes');
-    if (missing === true) parts.push('structured field: Missing Major Parts? = Yes');
-    if (functional === false) parts.push('structured field: Is Item Functional? = No');
+    const goodCondition = CONDITION_GOOD_RE.test(conditionText) && !CONDITION_PARTS_RE.test(conditionText);
+
+    // Keyword scan sees the Condition value, the auctioneer's descriptions and
+    // remaining prose — never the field labels.
+    const scan = [conditionText, damageDesc, missingDesc, notes, free].filter(Boolean).join('\n');
 
     /*
-     * Keyword scan runs on the CONDITION VALUE and the remaining prose only —
-     * never on the field labels. "Is Item Damaged? No" must not read as damage.
+     * Three severities, because collapsing them misleads in both directions:
+     *
+     *   partsOnly — spares only. Retail comparison is suppressed entirely.
+     *   damaged   — real damage or missing pieces, but still a usable item.
+     *               Warn loudly; keep the ceiling, since it still has value.
+     *   cautions  — open box, used, untested. Worth knowing, not alarming.
      */
-    const scan = [conditionText, notes, free].filter(Boolean).join('\n');
+    const parts = [];
+    if (CONDITION_PARTS_RE.test(conditionText)) {
+      parts.push(`Condition: ${conditionText.trim()}`);
+    }
     for (const p of PARTS_PATTERNS) {
-      if (p.re.test(scan)) parts.push(p.label);
+      if (p.re.test([damageDesc, missingDesc, notes, free].filter(Boolean).join('\n'))) parts.push(p.label);
     }
 
-    const positive = POSITIVE_RE.test([conditionText, notes, free].join('\n')) || functional === true;
+    const damage = [];
+    if (damagedFlag === true) {
+      damage.push(damageDesc
+        ? `auctioneer reports damage: "${damageDesc.trim()}"`
+        : 'structured field: Is Item Damaged? = Yes');
+    }
+    if (missingFlag === true) {
+      damage.push(missingDesc
+        ? `parts missing: "${missingDesc.trim()}"`
+        : 'structured field: Missing Major Parts? = Yes');
+    }
+    // "Is Item Functional? No" is only meaningful alongside other evidence:
+    // for anything unpowered the honest answer is N/A, and some auctioneers
+    // still type "No". On its own it is not proof of a fault.
+    if (functionalFlag === false && (damage.length || parts.length || !goodCondition)) {
+      damage.push('structured field: Is Item Functional? = No');
+    }
+
+    const positive = CONDITION_GOOD_RE.test(conditionText) ||
+      POSITIVE_RE.test([notes, free].join('\n')) || functionalFlag === true;
 
     let cautions = CAUTION_PATTERNS.filter((p) => p.re.test(scan)).map((p) => p.label);
     if (positive) cautions = cautions.filter((c) => !/untested|not tested|used/.test(c));
+    if (conditionText && !goodCondition && !CONDITION_PARTS_RE.test(conditionText)) {
+      cautions.unshift(`condition: ${conditionText.trim().toLowerCase()}`);
+    }
+
+    /*
+     * A positive Condition downgrades the boolean flags to cautions. "NEW
+     * (ADJUSTED QUANTITY)" with "Missing Major Parts? Yes / One piece missing"
+     * is a short-count new item, not a broken one — a skull banner there teaches
+     * the user to ignore skull banners.
+     */
+    const partsOnly = parts.length > 0;
+    const damagedOnly = !partsOnly && damage.length > 0 && !goodCondition;
+    if (damage.length && (goodCondition || partsOnly)) cautions = damage.concat(cautions);
 
     return {
-      partsOnly: parts.length > 0,
+      partsOnly,
       partsReasons: [...new Set(parts)],
+      damaged: damagedOnly,
+      damageReasons: damagedOnly ? [...new Set(damage)] : [],
       cautions: [...new Set(cautions)],
       positive,
       condition: conditionText,
@@ -475,6 +549,49 @@
 
   /** Capacity/spec tokens that materially move price: 32GB, 2TB, 1TB. */
   const CAPACITY_RE = /^\d+(?:\.\d+)?(?:gb|tb|mb)$/i;
+
+  /**
+   * Values auctioneers type into "Model:" that identify nothing. "A-Series" is
+   * a real example: the lot was an MSI B550M PRO-VDH, and trusting that field
+   * turned the search into "MSI A-Series".
+   */
+  const GENERIC_MODEL_RE = /^(?:n\/?a|none|null|nil|unknown|unspecified|various|assorted|misc(?:ellaneous)?|standard|generic|regular|default|see\s*(?:photos?|pictures?|description)|no\s*model|model|[a-z]\s*-?\s*series|series|multiple)$/i;
+
+  /** Does this string look like a model code at all? */
+  function looksLikeModel(s) {
+    const t = String(s || '').trim();
+    if (t.length < 2 || t.length > 24) return false;
+    if (GENERIC_MODEL_RE.test(t)) return false;
+    return /\d/.test(t) || MODEL_ALT_RE.test(t);
+  }
+
+  /** Lowercase alphanumeric runs: "MSI PRO Z890-S" -> ['msi','pro','z890','s']. */
+  const compactTokens = (s) =>
+    String(s == null ? '' : s).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().split(' ').filter(Boolean);
+
+  /**
+   * Does `title` contain `model` as a whole token or run of tokens?
+   *
+   * A plain substring test on de-hyphenated text is not good enough: model
+   * "A-Series" compacts to "aseries", which appears inside "Core Ultra Series 2"
+   * ("ultr-aseries"), so an Intel LGA1851 board matched an AM4 lot. Matching a
+   * contiguous run of WHOLE tokens keeps "WF-1000XM5" == "WF1000XM5" working
+   * while refusing matches that start mid-word.
+   */
+  function modelMatches(title, model) {
+    const target = String(model || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (!target) return false;
+    const toks = compactTokens(title);
+    for (let i = 0; i < toks.length; i++) {
+      let acc = '';
+      for (let j = i; j < toks.length; j++) {
+        acc += toks[j];
+        if (acc.length > target.length) break;
+        if (acc === target) return true;
+      }
+    }
+    return false;
+  }
 
   /**
    * Turn a HiBid lead/description into (a) a human product name and
@@ -538,11 +655,31 @@
 
     const brand = cleaned[0] || '';
 
-    // An explicit "Model:" field beats anything inferred from the title.
+    /*
+     * Model selection, in confidence order:
+     *
+     *   1. a "Model:" field that the title corroborates  — best of both
+     *   2. a model token from the title itself           — the title is the
+     *                                                      identity a buyer sees
+     *   3. an uncorroborated, plausible "Model:" field   — better than nothing
+     *
+     * Trusting the field outright (as v0.3.0 did) is wrong: "Model: A-Series" on
+     * an MSI B550M PRO-VDH lot turned the query into "MSI A-Series".
+     */
     const statedModel = (field(fields, 'model', 'model #', 'model number', 'mpn') || '').trim();
-    const model = (statedModel && statedModel.length <= 24 ? statedModel : null) ||
-      cleaned.find((t) => MODEL_RE.test(t) && !/^\d+$/.test(t)) ||
+    const titleModel = cleaned.find((t) => MODEL_RE.test(t) && !/^\d+$/.test(t)) ||
       cleaned.find((t) => MODEL_ALT_RE.test(t));
+
+    const statedOk = looksLikeModel(statedModel);
+    const model = (statedOk && modelMatches(fullName, statedModel) ? statedModel : null) ||
+      titleModel ||
+      (statedOk ? statedModel : null);
+
+    // A distinct secondary model token, e.g. PRO-VDH alongside B550M.
+    const model2 = cleaned.find((t) => t !== model &&
+      t.toLowerCase() !== String(model || '').toLowerCase() &&
+      t.toLowerCase() !== brand.toLowerCase() &&
+      MODEL_ALT_RE.test(t) && !GENERIC_MODEL_RE.test(t)) || null;
 
     // Query = brand + product line + model + capacity, in that order. Keeping
     // the capacity matters: a 32GB kit and a 16GB kit are not the same comp.
@@ -557,6 +694,10 @@
           !parts.some((x) => x.toLowerCase() === model.toLowerCase())) {
         parts.push(model);
       }
+      // A second model-ish token materially narrows the search for products
+      // whose family name alone is ambiguous: "MSI B550M" matches a dozen
+      // boards, "MSI B550M PRO-VDH" is the one in the lot.
+      if (model2 && !parts.some((x) => x.toLowerCase() === model2.toLowerCase())) parts.push(model2);
       const cap = cleaned.find((t) => CAPACITY_RE.test(t));
       if (cap && !parts.some((x) => x.toLowerCase() === cap.toLowerCase())) parts.push(cap);
       query = parts.join(' ');
@@ -569,6 +710,7 @@
       query: query.trim(),
       brand,
       model: model || null,
+      model2,
       tokens: cleaned.slice(0, 10),
     };
   }
@@ -756,11 +898,13 @@
 
     let score = 0;
 
+    // The model is mandatory when known, and must match on token boundaries.
     if (product.model) {
-      const loose = product.model.toLowerCase().replace(/[-\s]/g, '');
-      const hay = t.replace(/[-\s]/g, '');
-      if (hay.includes(loose)) score += 5; else return 0; // model is mandatory when known
+      if (modelMatches(raw, product.model)) score += 5; else return 0;
     }
+    // A second model-ish token (B550M PRO-VDH) is a strong confirmation but not
+    // mandatory — retailers often word it differently.
+    if (product.model2 && modelMatches(raw, product.model2)) score += 2;
     if (product.brand && t.includes(product.brand.toLowerCase())) score += 2;
 
     const toks = product.tokens.map((x) => x.toLowerCase()).filter((x) => x.length > 2);
@@ -1387,6 +1531,19 @@
         el('p', { html: 'Do <strong>not</strong> price this against a working retail unit. ' +
           'Assume no returns, no warranty, and that it may be missing components.' }),
       ]));
+    } else if (cond.damaged) {
+      /*
+       * Damaged or incomplete, but not scrap. Red banner with the auctioneer's
+       * own words, and deliberately distinct from parts-only: the item still
+       * has value, so the ceiling stays -- it just must not be priced as new.
+       */
+      host.cond.appendChild(banner('danger', '⚠️ DAMAGED / INCOMPLETE — read before bidding', [
+        el('p', { html: `The lot's own description reports: ` +
+          `${cond.damageReasons.map((r) => `<em>${r}</em>`).join(', ')}.` +
+          (cond.condition ? ` Condition: <strong>${cond.condition}</strong>.` : '') }),
+        el('p', { html: 'The retail figure below is for a <strong>new</strong> unit, so treat the ' +
+          'discount as optimistic and check the photos.' }),
+      ]));
     } else if (cond.cautions.length) {
       host.cond.appendChild(banner('warn', '⚠️ Condition caveats in this lot’s description', [
         el('p', { html: `Flagged: ${cond.cautions.map((c) => `<em>${c}</em>`).join(', ')}.` +
@@ -1875,6 +2032,7 @@
       parseFees, parseIncrements, floorToIncrement, incrementAt,
       allIn, maxHammerFor, discountPct, extractProduct, extractStatedRetail,
       assessCondition, isLargeItem, relevance, detectTax,
+      modelMatches, looksLikeModel, compactTokens,
       Providers, pickBest, lookupRetail,
       setHttp: (fn) => { HTTP = fn || gmHttp; },
       setConfig: (patch) => { CFG = Object.assign({}, CFG, patch); },

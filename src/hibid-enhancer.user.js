@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HiBid Enhancer Suite
 // @namespace    https://github.com/dgomesbr/hibid-enhancer-suite
-// @version      0.8.1
+// @version      0.9.0
 // @description  Retail price lookup, fee-aware bid ceilings, and loud condition warnings on HiBid lot pages.
 // @author       dgomesbr
 // @license      MIT
@@ -40,6 +40,16 @@
 
   const NS = 'hes';                 // storage / css prefix
   const CACHE_TTL_MS = 12 * 3600e3; // 12h — auction prices move, retail does not
+
+  /*
+   * Bump when the matching rules change, to retire quotes chosen under the old
+   * ones. Cached prices survive a script update, so after the accessory fixes a
+   * lot still showed "$47.84 TPM module" from a pre-fix lookup — the fix was in
+   * place and reached nobody until the cache aged out. Epoch 2 = post-accessory
+   * rules (v0.8.0/0.8.1: "for <product>" without a noun, component-part nouns,
+   * the 30%-of-stated-retail floor).
+   */
+  const CACHE_EPOCH = 2;
 
   const DEFAULTS = {
     // A lot is a "good deal" when the all-in cost is at least this far under retail.
@@ -211,7 +221,7 @@
   // -- cache ------------------------------------------------------------------
 
   const Cache = {
-    key: (k) => `${NS}:cache:${k}`,
+    key: (k) => `${NS}:cache:${CACHE_EPOCH}:${k}`,
     get(k) {
       const raw = GM_getValue(Cache.key(k), null);
       if (!raw) return null;
@@ -229,6 +239,19 @@
       for (const k of GM_listValues()) {
         if (k.startsWith(`${NS}:cache:`)) { GM_deleteValue(k); n++; }
       }
+      return n;
+    },
+
+    /** Drop entries written under an older matching epoch. */
+    sweepOldEpochs() {
+      const keep = `${NS}:cache:${CACHE_EPOCH}:`;
+      let n = 0;
+      try {
+        for (const k of GM_listValues()) {
+          if (k.startsWith(`${NS}:cache:`) && !k.startsWith(keep)) { GM_deleteValue(k); n++; }
+        }
+      } catch (_) { /* storage unavailable */ }
+      if (n) log(`retired ${n} cached quote(s) from an older matching epoch`);
       return n;
     },
   };
@@ -4115,5 +4138,6 @@
     };
   }
 
+  Cache.sweepOldEpochs();
   watch();
 })();

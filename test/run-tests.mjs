@@ -604,6 +604,16 @@ truthy('catalogHideImages defaults to off', /catalogHideImages:\s*false/.test(sr
 // routes the SPA away instead of expanding.
 truthy('Show more stops event propagation', /e\.stopPropagation\(\)/.test(src));
 
+/*
+ * Cached quotes survive a script update, so a matching fix reaches nobody until
+ * the 12h TTL expires: after the accessory fixes a lot still showed a $47.84 TPM
+ * module chosen under the old rules. The cache key must therefore carry an epoch,
+ * and old epochs must be swept.
+ */
+truthy('cache keys carry a matching epoch', /cache:\$\{CACHE_EPOCH\}:/.test(src));
+truthy('an epoch constant is defined', /const CACHE_EPOCH = \d+/.test(src));
+truthy('old epochs are swept at startup', /sweepOldEpochs\(\)/.test(src));
+
 truthy('@icon is inside the metadata block', /^\/\/ @icon\s+\S+/m.test(meta));
 truthy('@icon is a self-contained PNG data URI',
   /^\/\/ @icon\s+data:image\/png;base64,[A-Za-z0-9+/=]{500,}$/m.test(meta));

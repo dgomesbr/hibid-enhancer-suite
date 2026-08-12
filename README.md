@@ -125,10 +125,15 @@ get priced.
 
 ## Install
 
-1. Install [Tampermonkey](https://www.tampermonkey.net/).
-2. Open [`src/hibid-enhancer.user.js`](src/hibid-enhancer.user.js) **raw** —
-   Tampermonkey will offer to install it.
+1. Install [Tampermonkey](https://www.tampermonkey.net/) (Chrome, Edge, Firefox).
+2. **[→ Click here to install the script](https://raw.githubusercontent.com/dgomesbr/hibid-enhancer-suite/main/src/hibid-enhancer.user.js)** —
+   Tampermonkey intercepts the `.user.js` URL and shows its install page.
 3. Open any HiBid lot page.
+
+Pinned to the tagged release instead of `main`:
+[v0.1.0](https://raw.githubusercontent.com/dgomesbr/hibid-enhancer-suite/v0.1.0/src/hibid-enhancer.user.js).
+Installing from `main` is recommended — `@updateURL` points there, so
+Tampermonkey picks up new versions automatically.
 
 Tampermonkey will ask to allow cross-origin requests to `amazon.ca` and
 `bestbuy.ca` the first time. Both are needed for price lookups; deny them and the

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HiBid Enhancer Suite
 // @namespace    https://github.com/dgomesbr/hibid-enhancer-suite
-// @version      0.11.0
+// @version      0.12.0
 // @description  Retail price lookup, fee-aware bid ceilings, and loud condition warnings on HiBid lot pages.
 // @author       dgomesbr
 // @license      MIT
@@ -71,6 +71,7 @@
     catalogBatchSize: 6,   // lots priced concurrently on a catalog page (5-10)
     catalogTidy: true,     // strip page/tile noise on catalog pages
     catalogHideImages: false, // true = no lot photos at all (they then never load)
+    bidsBatchSize: 8,      // lots priced concurrently on a bids page
     debug: false,
   };
 
@@ -1256,7 +1257,12 @@
   async function lookupRetail(product) {
     const cacheKey = retailCacheKey(product);
     const cached = Cache.get(cacheKey);
-    if (cached) { log('cache hit', cacheKey); return cached; }
+    /*
+     * `cached: true` lets callers skip the politeness delay. A cache hit made no
+     * request, so pacing it slows the page for nobody's benefit — the same
+     * mistake that cost 6.6s of a warm catalog sweep.
+     */
+    if (cached) { log('cache hit', cacheKey); return Object.assign({}, cached, { cached: true }); }
     if (inflight.has(cacheKey)) { log('joined in-flight', cacheKey); return inflight.get(cacheKey); }
 
     const promise = lookupRetailUncached(product, cacheKey);
@@ -3816,15 +3822,25 @@
         return;
       }
 
-      const ind = indicatorFor(info.ratio);
+      /*
+       * On a bids page the discount is not the question — you have already bid.
+       * The question is raise, hold, or let go, so the verdict drives the colour
+       * there and the discount becomes supporting detail.
+       */
+      const ind = info.bidVerdict || indicatorFor(info.ratio);
       dot.className = `${base} ${NS}-ind-${ind.cls}`;
-      dot.title = info.ratio == null
+      const bidLine = info.bidVerdict
+        ? `${info.bidStatus ? `${info.bidStatus.toUpperCase()} — ` : ''}${ind.label}` +
+          `\n${ind.advice}` +
+          (info.maxBid != null ? `\nYour ceiling: ${money(info.maxBid)}` : '') + '\n'
+        : '';
+      dot.title = bidLine + (info.ratio == null
         ? `No retail price found — final cost ${info.cost ? money(info.cost.total) : '—'}`
-        : `${pct(info.disc)} off retail (${ind.label})` +
+        : `${pct(info.disc)} off retail (${indicatorFor(info.ratio).label})` +
           `\nFinal cost ${money(info.cost.total)} vs ${money(info.retail)} new` +
           (info.source ? ` at ${info.source}` : '') +
           (info.damaged ? '\n⚠ lot reports damage — retail is for a new unit' : '') +
-          (info.feesEstimated ? '\n⚠ fees estimated — this auction’s terms could not be read' : '');
+          (info.feesEstimated ? '\n⚠ fees estimated — this auction’s terms could not be read' : ''));
     },
 
     async enhance() {
@@ -4246,6 +4262,249 @@
     },
   };
 
+
+  // ===========================================================================
+  // SECTION 19 — Current bids / watch list
+  // ===========================================================================
+
+  /*
+   * /account/currentbids reuses the catalog's app-lot-tile markup, so the final
+   * price, the deal dot and the declutter all apply unchanged. Two things are
+   * different and both matter:
+   *
+   *   1. It lists lots from SEVERAL auctions at once, grouped under
+   *      app-watched-auction-header. Fees differ per auction, so a single
+   *      auction id read from the URL — which is what the catalog does — would
+   *      price half the page with the wrong premium. Each tile is mapped to the
+   *      header above it and fees are fetched per distinct auction.
+   *
+   *   2. Each tile carries a bid status ("Outbid" / "Winning"). Combined with the
+   *      ceiling that turns a flat list into a decision: raise, hold, or let go.
+   *      This is the question the page exists to answer and today it answers
+   *      only half of it — it tells you that you are losing, not whether losing
+   *      is the right outcome.
+   *
+   * The user's own maximum bid is deliberately NOT used. It exists only in the
+   * authenticated CurrentBidsSearch response, and reading it would mean getting
+   * hold of a bearer token. Everything below works from the rendered DOM plus
+   * the public lot/auction data, so no credential is ever touched.
+   */
+
+  const BID_STATUS_RE = /\b(outbid|winning|losing|won|lost|reserve not met)\b/i;
+
+  /** What to do about a lot you have already bid on. */
+  function bidVerdict({ status, nextCost, maxBid, retail }) {
+    const outbid = /outbid|losing/i.test(status || '');
+    const winning = /winning|won/i.test(status || '');
+
+    if (maxBid == null || !nextCost) {
+      return { cls: 'na', label: status || 'unknown', advice: 'no retail price — decide manually' };
+    }
+    const nextOver = nextCost.hammer > maxBid;
+
+    if (winning) {
+      return nextCost.total > (retail || Infinity)
+        ? { cls: 'red', label: 'winning above retail', advice: 'you are winning at a price above retail — consider retracting if the house allows it' }
+        : { cls: 'green', label: 'winning, good price', advice: 'hold; do not raise' };
+    }
+    if (outbid) {
+      return nextOver
+        ? { cls: 'red', label: 'let it go', advice: `the next bid is past your ${CFG.targetDiscountPct}%-off ceiling of ${money(maxBid)}` }
+        : { cls: 'green', label: 'worth raising', advice: `still under your ceiling of ${money(maxBid)}` };
+    }
+    return nextOver
+      ? { cls: 'orange', label: 'at your ceiling', advice: `next bid is past ${money(maxBid)}` }
+      : { cls: 'green', label: 'under your ceiling', advice: `ceiling ${money(maxBid)}` };
+  }
+
+  const Bids = {
+    _done: null,
+
+    /** Bid/watch pages under /account. */
+    isBidsPath() {
+      return /^\/account\/(currentbids|watchlist|pastbids|pastwatchlist|watchauctionlist|toppicks)/i
+        .test(location.pathname);
+    },
+
+    /**
+     * Map each tile to its auction. Tiles appear under a header per auction, so
+     * the nearest preceding header in document order owns the tile.
+     */
+    auctionMap(tiles) {
+      const headers = Array.from(document.querySelectorAll('app-watched-auction-header'));
+      const marks = headers.map((h) => {
+        const link = h.querySelector('a[href*="/catalog/"], a[href*="/auction/"]');
+        const m = link && link.getAttribute('href').match(/\/(?:catalog|auction)\/(\d+)/i);
+        return { node: h, id: m ? Number(m[1]) : null };
+      }).filter((x) => x.id);
+
+      const byTile = new Map();
+      for (const tile of tiles) {
+        let owner = null;
+        for (const mark of marks) {
+          // compareDocumentPosition: 4 = mark precedes tile
+          if (mark.node.compareDocumentPosition(tile.node) & 4) owner = mark.id;
+        }
+        byTile.set(tile.node, owner);
+      }
+      return byTile;
+    },
+
+    /** Fee stack per auction id, fetched once each. */
+    async feesByAuction(ids) {
+      const out = new Map();
+      const pageText = (document.body.innerText || '').slice(0, 4000);
+      for (const id of ids) {
+        if (id == null) continue;
+        let terms = { text: '', rate: null };
+        try {
+          terms = await GQL.auctionTerms(id);
+        } catch (e) {
+          warn(`terms for auction ${id}:`, e.message);
+        }
+        let fees = parseFees([terms.text]);
+        if (!fees.province) fees = parseFees([terms.text, pageText]);
+        if (/fallback/.test(fees.premiumSource || '') && terms.rate != null) {
+          fees.premiumPct = terms.rate;
+          fees.premiumSource = `auction.buyerPremiumRate (${terms.rate}%)`;
+        }
+        out.set(id, { fees, estimated: /fallback/.test(fees.premiumSource || '') });
+      }
+      return out;
+    },
+
+    async enhance() {
+      const tiles = Catalog.tiles();
+      if (!tiles.length) return false;
+
+      const key = tiles.map((t) => t.id).join(',');
+      const marked = document.querySelector(`.${NS}-final, .${NS}-ind`);
+      if (Bids._done === key && marked) return true;
+      Bids._done = key;
+
+      Loader.show();
+      try {
+        Tidy.page();
+
+        const byTile = Bids.auctionMap(tiles);
+        const auctionIds = [...new Set([...byTile.values()].filter((v) => v != null))];
+
+        const [feeMap, lots] = await Promise.all([
+          Bids.feesByAuction(auctionIds),
+          GQL.lots(tiles.map((t) => t.id)).catch((e) => { warn('lots:', e.message); return []; }),
+        ]);
+        const byId = new Map(lots.map((l) => [l.id, l]));
+
+        // ---- pass 1: final price and status, no per-lot network -----------
+        const work = [];
+        const costCache = new Map();
+        for (const tile of tiles) {
+          const auctionId = byTile.get(tile.node);
+          const entry = feeMap.get(auctionId);
+          const fees = entry ? entry.fees : parseFees([]);
+          const estimated = entry ? entry.estimated : true;
+
+          const lot = byId.get(tile.id) || {};
+          const lead = lot.lead || tile.title || '';
+          const description = lot.description || '';
+          const cond = assessCondition([lead, description].join('\n'));
+          const large = isLargeItem(`${lead}\n${description}`);
+          const next = num(txt(tile.amountEl));
+
+          let cost = null;
+          if (next != null) {
+            const bucket = `${auctionId}|${next}|${large ? 'L' : ''}`;
+            if (!costCache.has(bucket)) costCache.set(bucket, allIn(next, fees, { large }));
+            cost = costCache.get(bucket);
+          }
+
+          Tidy.tile(tile);
+          Catalog.setFinal(tile, cost, estimated);
+          Catalog.setIndicator(tile, { pending: true });
+
+          const status = (() => {
+            const n = tile.node.querySelector('.bid-status');
+            const t = n ? txt(n) : '';
+            return BID_STATUS_RE.test(t) ? t : '';
+          })();
+
+          const product = extractProduct(lead, description);
+          const stated = extractStatedRetail(lead, description, lot.estimate || '');
+          if (stated) product.statedRetail = stated.value;
+
+          work.push({ tile, product, stated, cond, cost, next, large, fees, estimated, status });
+        }
+
+        /*
+         * Order the sweep by how much the answer matters.
+         *
+         * A cold bids page is network-bound and cannot be made fast: unlike a
+         * catalog, its ~100 lots are ~100 distinct products, so it is ~200
+         * retailer requests however they are arranged. Measured end to end: 124s.
+         *
+         * What can be fixed is WHICH answers arrive first. A lot you are being
+         * outbid on may need action within minutes; one you are comfortably
+         * winning does not. Sorting outbid-first means the decisions you might
+         * act on resolve in the first seconds instead of after two minutes.
+         */
+        const priority = (w) => {
+          if (/outbid|losing/i.test(w.status)) return 0;
+          if (!w.status) return 1;
+          return 2;                              // winning: nothing to decide yet
+        };
+        work.sort((a, b) => priority(a) - priority(b));
+
+        // ---- pass 2: retail, then a verdict that knows your bid status -----
+        const size = Math.max(1, Math.min(20, CFG.bidsBatchSize || CFG.catalogBatchSize || 8));
+        for (let i = 0; i < work.length; i += size) {
+          if (Bids._done !== key) return true;
+          const batch = work.slice(i, i + size);
+          const needsNetwork = [];
+
+          await Promise.all(batch.map(async (w) => {
+            let best = null;
+            if (!w.cond.partsOnly && w.product.query) {
+              try {
+                const res = await lookupRetail(w.product);
+                best = pickBest(res.quotes);
+                if (!res.cached) needsNetwork.push(1);
+              } catch (e) { /* fall back to the stated figure */ }
+            }
+            const retail = best ? best.price : (w.stated ? w.stated.value : null);
+            const ratio = (retail && w.cost) ? w.cost.total / retail : null;
+            const maxHammer = maxHammerFor(retail, CFG.targetDiscountPct, w.fees, { large: w.large });
+            const maxBid = maxHammer != null ? floorToIncrement(maxHammer, []) : null;
+            const verdict = bidVerdict({ status: w.status, nextCost: w.cost, maxBid, retail });
+
+            Catalog.setIndicator(w.tile, {
+              ratio,
+              disc: ratio == null ? null : (1 - ratio) * 100,
+              cost: w.cost,
+              retail,
+              source: best ? best.provider : (w.stated ? 'auctioneer’s figure' : null),
+              partsOnly: w.cond.partsOnly,
+              damaged: w.cond.damaged,
+              feesEstimated: w.estimated,
+              // Bid-specific: the decision, not just the discount.
+              bidStatus: w.status,
+              bidVerdict: verdict,
+              maxBid,
+            });
+          }));
+
+          // Only pace batches that actually went to a retailer.
+          if (needsNetwork.length && i + size < work.length) {
+            await new Promise((r) => setTimeout(r, 350));
+          }
+        }
+        log(`bids: ${work.length} lots priced across ${auctionIds.length} auction(s)`);
+        return true;
+      } finally {
+        Loader.hide();
+      }
+    },
+  };
+
   // ===========================================================================
   // SECTION 14 — Page router + SPA navigation
   // ===========================================================================
@@ -4253,6 +4512,7 @@
   function pageKind() {
     const p = location.pathname;
     if (/^\/lot\//i.test(p)) return 'detail';
+    if (Bids.isBidsPath()) return 'bids';
     if (/^\/(?:catalog|auction)\//i.test(p)) return 'catalog';
     if (/^\/lots\b/i.test(p) || /^\/search\b/i.test(p)) return 'search';
     return 'other';
@@ -4261,6 +4521,8 @@
   const PAGES = {
     detail: enhanceDetail,
     catalog: () => Catalog.enhance(),
+    // Same tile markup, but many auctions at once and a bid status per lot.
+    bids: () => Bids.enhance(),
     // Search results reuse the same tile markup, so the catalog pass fits.
     search: () => Catalog.enhance(),
     other: async () => true,
@@ -4279,7 +4541,7 @@
      * hiding thumbnails there, which is exactly how "no product images load"
      * looked. Drop the class whenever the current view is not a lot list.
      */
-    if (kind !== 'catalog' && kind !== 'search') {
+    if (kind !== 'catalog' && kind !== 'search' && kind !== 'bids') {
       document.body.classList.remove(`${NS}-tidy`);
       document.body.classList.remove(`${NS}-noimg`);
     }
@@ -4345,6 +4607,7 @@
       lastUrl = pageUrl();
       State.lastKey = null;
       Catalog._done = null;              // a new lot list is a new set of tiles
+      Bids._done = null;
       if (pageKind() === 'detail') resetDetail();
       Perf.count(`navigation:${reason}`);
       kick(`navigation (${reason})`);
@@ -4380,7 +4643,7 @@
       if (State.lastKey === key) return;                 // already done
       const k = pageKind();
       if (k === 'detail' && !document.querySelector('app-information-panel')) return;
-      if ((k === 'catalog' || k === 'search') && !document.querySelector('app-lot-tile, .lot-tile')) return;
+      if ((k === 'catalog' || k === 'search' || k === 'bids') && !document.querySelector('app-lot-tile, .lot-tile')) return;
       kick('dom');
     });
     obs.observe(document.body, { childList: true, subtree: true });
@@ -4431,7 +4694,7 @@
     window.__hesInternals = {
       parseFees, parseIncrements, floorToIncrement, incrementAt,
       allIn, maxHammerFor, discountPct, extractProduct, extractStatedRetail,
-      assessCondition, isLargeItem, relevance, detectTax,
+      assessCondition, isLargeItem, relevance, detectTax, bidVerdict,
       modelMatches, looksLikeModel, compactTokens, priceFloor, isAccessoryListing,
       Providers, pickBest, lookupRetail,
       parseLotId, parseAuctionId, splitNotice, conditionTone, conditionChips,

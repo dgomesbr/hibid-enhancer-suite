@@ -13,8 +13,8 @@ nobody.
 | Where | Example |
 |---|---|
 | `src/hibid-enhancer.user.js` → `// @version` | `0.4.0` |
-| `package.json` → `"version"` | `0.11.0` |
-| the git tag | `v0.11.0` |
+| `package.json` → `"version"` | `0.12.0` |
+| the git tag | `v0.12.0` |
 
 `npm test` fails if the first two disagree — that check exists precisely so a
 forgotten bump cannot become a silent non-release.
@@ -80,6 +80,7 @@ the parser fix so the suite keeps its teeth.
 
 | Version | Highlights |
 |---|---|
+| `v0.12.0` | Current-bids page: final price, deal dots and a raise / hold / let-go verdict per lot, with per-auction fees and no credential handling. |
 | `v0.11.0` | Catalog no longer paces work that makes no requests, and stops forcing a layout to find a province it usually already knows. |
 | `v0.10.0` | One consolidated lot-details card, decision first (BLUF), max bid in its own box, and six quietened labels in the bid strip. |
 | `v0.9.0` | Bid numbers printed once; fees re-derived from the auction's own text on lot pages; stale cached quotes retired by a matching epoch. |

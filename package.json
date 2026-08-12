@@ -1,6 +1,6 @@
 {
   "name": "hibid-enhancer-suite",
-  "version": "0.11.0",
+  "version": "0.12.0",
   "description": "Tampermonkey userscript for HiBid: live Canadian retail pricing, fee-aware bid ceilings, and loud condition warnings.",
   "private": true,
   "type": "module",

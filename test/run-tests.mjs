@@ -568,6 +568,58 @@ const wrongFees = Object.assign({}, rodeFees, { premiumPct: 18 });
 truthy('the 18% fallback really did change the answer',
   Math.abs(H.maxHammerFor(251, 50, wrongFees, { large: false }) - rodeMax) > 1);
 
+console.log('\n9c. Bid verdicts on the current-bids page');
+/*
+ * On /account/currentbids the discount is not the question - you have already
+ * bid. The question is raise, hold, or let go. HiBid tells you that you are
+ * losing; it does not tell you whether losing is the right outcome.
+ *
+ * The user's own maximum bid is deliberately NOT used: it exists only in the
+ * authenticated response, and reading it would mean handling a bearer token.
+ * These verdicts work from the rendered status plus the computed ceiling.
+ */
+const vFees = H.parseFees([TERMS, LOCATION]);
+const costAt = (h) => H.allIn(h, vFees, { large: false });
+
+const chase = H.bidVerdict({ status: 'Outbid', nextCost: costAt(40), maxBid: 104, retail: 278 });
+check('outbid but under the ceiling is worth raising', chase.cls, 'green');
+truthy('and says so', /raising/i.test(chase.label));
+
+const drop = H.bidVerdict({ status: 'Outbid', nextCost: costAt(150), maxBid: 104, retail: 278 });
+check('outbid past the ceiling is a walk-away', drop.cls, 'red');
+truthy('and names the ceiling', /104/.test(drop.advice));
+
+const hold = H.bidVerdict({ status: 'Winning', nextCost: costAt(40), maxBid: 104, retail: 278 });
+check('winning at a good price is green', hold.cls, 'green');
+truthy('and advises holding', /hold/i.test(hold.advice));
+
+// Winning ABOVE retail is the expensive mistake this page should surface.
+const overpaying = H.bidVerdict({ status: 'Winning', nextCost: costAt(400), maxBid: 104, retail: 278 });
+check('winning above retail is red', overpaying.cls, 'red');
+truthy('and says you are above retail', /above retail/i.test(overpaying.label));
+
+const unknown = H.bidVerdict({ status: 'Outbid', nextCost: costAt(40), maxBid: null, retail: null });
+check('no ceiling means no verdict', unknown.cls, 'na');
+truthy('status is still surfaced', /outbid/i.test(unknown.label));
+
+// The page must be routed at all: it was classified "other" before, which is
+// why nothing was enhanced there.
+truthy('currentbids is recognised', /currentbids/.test(src));
+truthy('a bids page kind exists', /return .bids./.test(src));
+truthy('bids pages get their own handler', /bids: \(\) => Bids\.enhance\(\)/.test(src));
+
+/*
+ * No credential handling anywhere. Checked against the code with comments
+ * stripped, because the comments legitimately discuss the bearer token in order
+ * to explain why it is never touched - and matched the naive test.
+ */
+const codeOnly = src
+  .replace(/\/\*[\s\S]*?\*\//g, '')
+  .replace(/^\s*\/\/.*$/gm, '');
+falsy('no cookie is read', /document\.cookie/.test(codeOnly));
+falsy('no Authorization header is set', /['\"]Authorization['\"]\s*:/i.test(codeOnly));
+falsy('no JWT is pattern-matched out of anything', /eyJ[A-Za-z0-9_-]/.test(codeOnly));
+
 // ===========================================================================
 console.log('\n10. Packaging / release metadata');
 // ===========================================================================

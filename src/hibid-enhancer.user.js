@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HiBid Enhancer Suite
 // @namespace    https://github.com/dgomesbr/hibid-enhancer-suite
-// @version      0.5.0
+// @version      0.5.1
 // @description  Retail price lookup, fee-aware bid ceilings, and loud condition warnings on HiBid lot pages.
 // @author       dgomesbr
 // @license      MIT
@@ -833,7 +833,13 @@
   // SECTION 9 — Retail price providers
   // ===========================================================================
 
-  const ACCESSORY_NOUN_RE = /\b(case|cover|sleeve|skin|pouch|protector|tips|eartips|cable|charger|adapter|mount|holder|stand|strap|band|bumper|shell|film|dock|lanyard|clip)\b/i;
+  /*
+   * Accessory head-nouns. The component-part entries (baffle, shield, backplate,
+   * bracket, standoff…) matter as much as the phone-case ones: a "rear baffle for
+   * MSI B550M PRO-VDH" matches the brand and the model perfectly and costs $15,
+   * so it will happily pose as the retail price of a $120 motherboard.
+   */
+  const ACCESSORY_NOUN_RE = /\b(case|cover|sleeve|skin|pouch|protector|tips|eartips|cable|charger|adapter|mount|holder|stand|strap|band|bumper|shell|film|dock|lanyard|clip|baffle|shield|backplate|back\s*plate|faceplate|bracket|standoffs?|screws?|screw\s*kit|thermal\s*pad|riser|extender|gasket|grommet|spacer|shroud|bezel|decal|sticker|manual)\b/i;
   const ACCESSORY_MARKER_RE = /\b(compatible\s+with|replacement\s+for|designed\s+for|made\s+for|for\s+use\s+with|fits\s+(?:the\s+)?[A-Z0-9])/i;
   /** Retailer condition prefixes that sit in front of the real brand. */
   const TITLE_PREFIX_RE = /^\s*(?:\(?\s*(?:open\s*box|openbox|refurbished|refurb|renewed|used|pre[\s-]?owned)[^-|:]*\)?\s*[-–|:]\s*)+/i;
@@ -923,6 +929,26 @@
    * variant, a bundle, a stray accessory — undercut the real product and wreck
    * the bid math, so only the top relevance band is eligible.
    */
+  /*
+   * Reject candidates far below the auctioneer's own stated retail.
+   *
+   * Accessories are the dominant source of wrong matches and they are always
+   * dramatically cheaper than the thing they attach to: a $15 rear baffle for a
+   * $120 motherboard, a $27 case for $328 earbuds. Both match brand and model
+   * perfectly, so text scoring alone cannot separate them — but an order-of-
+   * magnitude price gap can.
+   *
+   * Deliberately generous (30%) so a genuinely good find still passes, and only
+   * applied when the auctioneer gave a figure to compare against. Failing here
+   * yields "no retail price", never a wrong one.
+   */
+  const PRICE_FLOOR_RATIO = 0.30;
+
+  function priceFloor(product) {
+    const stated = product && product.statedRetail;
+    return (stated && isFinite(stated) && stated > 0) ? stated * PRICE_FLOOR_RATIO : 0;
+  }
+
   function chooseCandidate(scored, priceOf, isNewOf) {
     if (!scored || !scored.length) return null;
     const top = Math.max(...scored.map((x) => x.score));
@@ -955,6 +981,7 @@
         if (USED_RE.test(name)) score -= 3;
         return { p, score, isNew: !USED_RE.test(name) };
       }).filter((x) => x.score > 0)
+        .filter((x) => (x.p.salePrice || x.p.regularPrice || 0) >= priceFloor(product))
         .sort((a, b) => b.score - a.score);
 
       if (!scored.length) return null;
@@ -1064,6 +1091,7 @@
       const scored = results
         .map((x) => ({ ...x, score: relevance(x.title, product) - (x.used ? 3 : 0) }))
         .filter((x) => x.score > 0)
+        .filter((x) => x.price >= priceFloor(product))
         .sort((a, b) => b.score - a.score);
 
       if (!scored.length) return null;
@@ -1566,6 +1594,8 @@
 
     const cell = injectRetailRow(rows, product);
     const stated = extractStatedRetail(lead, description, estimateText);
+    // Lets the providers reject candidates an order of magnitude too cheap.
+    if (stated) product.statedRetail = stated.value;
 
     const ctx = {
       gen: ++State.gen,
@@ -2130,12 +2160,10 @@
           Catalog.setFinal(tile, cost);
           Catalog.setIndicator(tile, { pending: true });
 
-          work.push({
-            tile,
-            product: extractProduct(lead, description),
-            stated: extractStatedRetail(lead, description, lot.estimate || ''),
-            cond, cost, next, large,
-          });
+          const product = extractProduct(lead, description);
+          const stated = extractStatedRetail(lead, description, lot.estimate || '');
+          if (stated) product.statedRetail = stated.value;
+          work.push({ tile, product, stated, cond, cost, next, large });
         }
 
         // ---- pass 2: retail lookups, in small batches --------------------
@@ -2287,7 +2315,7 @@
       parseFees, parseIncrements, floorToIncrement, incrementAt,
       allIn, maxHammerFor, discountPct, extractProduct, extractStatedRetail,
       assessCondition, isLargeItem, relevance, detectTax,
-      modelMatches, looksLikeModel, compactTokens,
+      modelMatches, looksLikeModel, compactTokens, priceFloor, isAccessoryListing,
       Providers, pickBest, lookupRetail,
       setHttp: (fn) => { HTTP = fn || gmHttp; },
       setConfig: (patch) => { CFG = Object.assign({}, CFG, patch); },

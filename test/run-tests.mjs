@@ -311,6 +311,38 @@ for (const good of [
   truthy(`genuine listing kept: ${good.slice(0, 42)}…`, H.relevance(good, prod) > 0);
 }
 
+/*
+ * Component-part accessories. These match brand and model perfectly and are an
+ * order of magnitude cheaper than the thing they bolt onto, so text scoring
+ * alone cannot separate them. Reported from the wild: a rear baffle matched
+ * instead of an MSI B550M PRO-VDH motherboard.
+ */
+const mbLot = H.extractProduct('MSI B550M PRO-VDH WIFI MOTHERBOARD (AM4)', '');
+for (const bad of [
+  'Rear Baffle for MSI B550M PRO-VDH Motherboard',
+  'I/O Shield for MSI B550M PRO-VDH WIFI',
+  'Backplate Bracket for MSI B550M PRO-VDH',
+  'Motherboard Standoffs and Screws Kit for MSI B550M PRO-VDH',
+]) {
+  check(`component accessory rejected: ${bad.slice(0, 40)}…`, H.relevance(bad, mbLot), 0);
+}
+truthy('the real motherboard still scores',
+  H.relevance('MSI B550M PRO-VDH WIFI Micro-ATX LGA AM4 DDR4 Motherboard for AMD Ryzen', mbLot) > 0);
+
+// The price floor: a second, category-agnostic defence. Accessories are always
+// dramatically cheaper than the item, so anything under 30% of the auctioneer's
+// own stated retail is refused outright rather than reported as a bargain.
+check('no floor without a stated retail', H.priceFloor(mbLot), 0);
+mbLot.statedRetail = 124;
+check('floor is 30% of the stated retail', H.priceFloor(mbLot), 37.2, 0.01);
+truthy('a $15 baffle is below the floor', 15 < H.priceFloor(mbLot));
+truthy('the real $119.99 board is above it', 119.99 > H.priceFloor(mbLot));
+
+const earbudLot = H.extractProduct('Retail $328.00 | Sony WF-1000XM5 Earbuds', '');
+earbudLot.statedRetail = 328;
+truthy('the $26.99 Spigen case is below the floor too', 26.99 < H.priceFloor(earbudLot));
+truthy('but a genuine $278 unit clears it', 278 > H.priceFloor(earbudLot));
+
 // A lot that IS an accessory must still be priceable.
 const caseLot = H.extractProduct('Retail $29.99 | Spigen Rugged Armor Case for Sony WF-1000XM5', '');
 truthy('an accessory lot can still match accessory listings',

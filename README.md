@@ -776,6 +776,14 @@ flat list into a decision:
 HiBid already tells you that you are losing. It does not tell you whether losing
 is the right outcome, which is the only question the page exists to answer.
 
+Lots in the **let it go** case — outbid *and* past your ceiling — are faded to 50%
+so they stop competing for attention with the ones you can still act on. Hover
+restores them; nothing is hidden, because the bid history is yours. Measured on a
+real page: 10 of 100 tiles faded.
+
+"Winning above retail" deliberately stays at full opacity. That one wants your
+attention, because you are on course to overpay.
+
 ### No credentials are touched
 
 Your own maximum bid would be useful here and is **deliberately not used**. It

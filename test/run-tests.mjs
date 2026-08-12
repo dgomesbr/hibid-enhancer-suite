@@ -609,6 +609,23 @@ truthy('a bids page kind exists', /return .bids./.test(src));
 truthy('bids pages get their own handler', /bids: \(\) => Bids\.enhance\(\)/.test(src));
 
 /*
+ * Which lots fade. The rule is "outbid AND past the ceiling" - nothing left to
+ * decide. "Winning above retail" must NOT fade: that one wants attention,
+ * because you are on course to overpay.
+ */
+const fades = (status, hammer) => {
+  const v = H.bidVerdict({ status, nextCost: costAt(hammer), maxBid: 104, retail: 278 });
+  return /outbid|losing/i.test(status) && v.cls === 'red';
+};
+truthy('outbid past the ceiling fades', fades('Outbid', 150));
+falsy('outbid under the ceiling does not fade', fades('Outbid', 40));
+falsy('winning above retail does NOT fade - it needs attention', fades('Winning', 400));
+falsy('winning at a good price does not fade', fades('Winning', 40));
+truthy('the fade class is applied to the whole tile', /-spent`, spent\)/.test(src));
+truthy('the fade is 50% opacity', /-spent\{opacity:\.5/.test(src));
+truthy('hover restores it', /-spent:hover/.test(src));
+
+/*
  * No credential handling anywhere. Checked against the code with comments
  * stripped, because the comments legitimately discuss the bearer token in order
  * to explain why it is never touched - and matched the naive test.

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HiBid Enhancer Suite
 // @namespace    https://github.com/dgomesbr/hibid-enhancer-suite
-// @version      0.12.0
+// @version      0.12.1
 // @description  Retail price lookup, fee-aware bid ceilings, and loud condition warnings on HiBid lot pages.
 // @author       dgomesbr
 // @license      MIT
@@ -1490,6 +1490,14 @@
     body.${NS}-tidy .lot-tile .watch-container{display:none !important;}
 
     .${NS}-hidden{display:none !important;}
+
+    /* Lots you have been outbid on whose next bid is past your ceiling. Faded
+       rather than hidden: the bid history is the user's and removing rows from
+       their own account page would be presumptuous. Hover restores it, so the
+       information is still one glance away. */
+    body.${NS}-tidy .${NS}-spent{opacity:.5;transition:opacity .12s ease-in-out;}
+    body.${NS}-tidy .${NS}-spent:hover,
+    body.${NS}-tidy .${NS}-spent:focus-within{opacity:1;}
 
     /* ---- Auction header box --------------------------------------------- */
     body.${NS}-tidy .${NS}-head-img{display:none !important;}
@@ -4475,6 +4483,18 @@
             const maxHammer = maxHammerFor(retail, CFG.targetDiscountPct, w.fees, { large: w.large });
             const maxBid = maxHammer != null ? floorToIncrement(maxHammer, []) : null;
             const verdict = bidVerdict({ status: w.status, nextCost: w.cost, maxBid, retail });
+
+            /*
+             * Fade the lots with nothing left to decide: you have been outbid AND
+             * the next bid is past your ceiling. They stay on the page — the bid
+             * history is yours — but they should stop competing for attention with
+             * the ones you can still act on.
+             *
+             * Deliberately NOT applied to "winning above retail": that one wants
+             * attention, because you are on course to overpay.
+             */
+            const spent = /outbid|losing/i.test(w.status) && verdict.cls === 'red';
+            w.tile.node.classList.toggle(`${NS}-spent`, spent);
 
             Catalog.setIndicator(w.tile, {
               ratio,

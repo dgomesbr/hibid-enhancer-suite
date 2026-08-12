@@ -1,0 +1,23 @@
+{
+  "name": "hibid-enhancer-suite",
+  "version": "0.1.0",
+  "description": "Tampermonkey userscript for HiBid: live Canadian retail pricing, fee-aware bid ceilings, and loud condition warnings.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node test/run-tests.mjs && node test/run-provider-tests.mjs",
+    "test:logic": "node test/run-tests.mjs",
+    "test:providers": "node test/run-provider-tests.mjs",
+    "check": "node --check src/hibid-enhancer.user.js"
+  },
+  "devDependencies": {
+    "linkedom": "^0.18.0"
+  },
+  "license": "MIT",
+  "author": "dgomesbr",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dgomesbr/hibid-enhancer-suite.git"
+  },
+  "keywords": ["tampermonkey", "userscript", "hibid", "auctions", "canada"]
+}

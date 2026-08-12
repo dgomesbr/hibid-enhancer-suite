@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  HiBid Enhancer Suite icon — "H+".
+
+  The glyphs are drawn as rectangles rather than <text>, deliberately: a userscript
+  icon is rendered at 16px in the Tampermonkey dashboard and in the browser's
+  script list, where font hinting and whatever font stack happens to be available
+  make text unreliable. Geometry renders identically everywhere and stays legible
+  when scaled down.
+
+  Palette matches the in-page pulse loader (#38bdf8 -> #a855f7).
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128"
+     role="img" aria-label="HiBid Enhancer Suite">
+  <title>HiBid Enhancer Suite</title>
+
+  <defs>
+    <!-- 45deg, to match linear-gradient(45deg, ...) which runs bottom-left to top-right -->
+    <linearGradient id="hesBg" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#38bdf8"/>
+      <stop offset="1" stop-color="#a855f7"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Tile -->
+  <rect x="0" y="0" width="128" height="128" rx="28" ry="28" fill="url(#hesBg)"/>
+  <!-- Hairline for definition against white dashboards -->
+  <rect x="0.75" y="0.75" width="126.5" height="126.5" rx="27.5" ry="27.5"
+        fill="none" stroke="#0f172a" stroke-opacity="0.14" stroke-width="1.5"/>
+
+  <g fill="#ffffff">
+    <!-- H: two stems and a crossbar -->
+    <rect x="22" y="34" width="14" height="60" rx="2.5"/>
+    <rect x="56" y="34" width="14" height="60" rx="2.5"/>
+    <rect x="22" y="57" width="48" height="14" rx="2.5"/>
+
+    <!-- Plus, centred on the crossbar so it reads as "H+".
+         Stroke weight matches the H (14) so it holds together at 16px. -->
+    <rect x="81" y="57" width="26" height="14" rx="2.5"/>
+    <rect x="87" y="51" width="14" height="26" rx="2.5"/>
+  </g>
+</svg>

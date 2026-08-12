@@ -325,5 +325,33 @@ check('named province fallback', H.detectTax('Located in British Columbia').pct,
 check('unknown location defaults to 13', H.detectTax('somewhere').pct, 13);
 
 // ===========================================================================
+console.log('\n10. Packaging / release metadata');
+// ===========================================================================
+/*
+ * Tampermonkey only offers an update when @version INCREASES, so a release
+ * whose @version was not bumped silently never reaches anyone. These guards
+ * make that a test failure instead of a mystery.
+ */
+const meta = src.slice(0, src.indexOf('// ==/UserScript=='));
+const pkg = JSON.parse(readFileSync(join(here, '..', 'package.json'), 'utf8'));
+
+const scriptVersion = (meta.match(/^\/\/ @version\s+(\S+)/m) || [])[1];
+truthy('@version is present', !!scriptVersion);
+check('@version matches package.json', scriptVersion, pkg.version);
+truthy('@version is semver-ish', /^\d+\.\d+\.\d+$/.test(scriptVersion || ''));
+
+truthy('@icon is inside the metadata block', /^\/\/ @icon\s+\S+/m.test(meta));
+truthy('@icon is a self-contained PNG data URI',
+  /^\/\/ @icon\s+data:image\/png;base64,[A-Za-z0-9+/=]{500,}$/m.test(meta));
+truthy('@updateURL is set so installs auto-update', /^\/\/ @updateURL\s+https:\/\//m.test(meta));
+truthy('@downloadURL is set', /^\/\/ @downloadURL\s+https:\/\//m.test(meta));
+
+// Every cross-origin host the providers touch needs a matching @connect, or
+// Tampermonkey blocks the request at runtime.
+for (const host of ['amazon.ca', 'bestbuy.ca', 'api.keepa.com']) {
+  truthy(`@connect ${host}`, meta.includes(`@connect      ${host}`) || meta.includes(`@connect ${host}`));
+}
+
+// ===========================================================================
 console.log(`\n${pass + fail} assertions: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

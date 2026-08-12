@@ -1,3 +1,5 @@
+<img src="assets/icon-128.png" width="96" align="right" alt="HiBid Enhancer Suite icon">
+
 # HiBid Enhancer Suite
 
 A Tampermonkey userscript that turns a HiBid lot page into a decision.
@@ -155,7 +157,7 @@ never sent anywhere except `api.keepa.com`.
 ## Tests
 
 ```bash
-node test/run-tests.mjs            # 86 assertions, no dependencies
+node test/run-tests.mjs            # 96 assertions, no dependencies
 
 npm install --no-save linkedom     # provides DOMParser for Node
 node test/run-provider-tests.mjs   # 29 assertions against real captured responses
@@ -169,6 +171,37 @@ The suites cover the fee parser against five real auction fee wordings, the
 round-trip property that `allIn(maxHammerFor(retail, d)) == d% under retail`
 across prices and targets, bid-increment rounding, province tax detection,
 parts-only detection, and every accessory/homonym trap found while building this.
+
+## Icon
+
+The dashboard icon is an "H+" tile in the same gradient as the in-page loader.
+
+![Icon at every size, light and dark](assets/icon-preview.png)
+
+The glyphs are drawn as geometry, not `<text>`: the icon is displayed at 16px in
+the Tampermonkey dashboard, where font availability and hinting make text
+unreliable. It is embedded in `@icon` as a base64 PNG data URI, so it needs no
+network, works offline, and survives a repo rename.
+
+Regenerate after editing `assets/icon.svg`:
+
+```bash
+npm run icon      # writes assets/icon-*.png + assets/icon-datauri.txt
+```
+
+then paste `assets/icon-datauri.txt` into the `@icon` line.
+`assets/icon.svg` is the readable source; `tools/make-icon.py` is the renderer,
+and the two share the same coordinates.
+
+## Releasing
+
+**Every feature and fix ships as a tagged, published release** — installed copies
+only update via `@updateURL`, and Tampermonkey only offers an update when
+`@version` increases, so an unbumped version reaches nobody. `npm test` asserts
+that `@version` and `package.json` agree, which turns a forgotten bump into a
+test failure rather than a silent non-release.
+
+Full checklist in **[RELEASING.md](RELEASING.md)**.
 
 ## Page support
 

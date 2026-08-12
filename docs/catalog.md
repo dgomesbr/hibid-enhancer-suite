@@ -1,7 +1,7 @@
 # Catalog and lot-list pages
 
 One hundred lots per page, each with a real final price and a colour-coded
-verdict — and what had to happen to make that fast enough to be useful.
+verdict, and what had to happen to make that fast enough to be useful.
 
 On a catalog page (`/catalog/<id>`) every lot tile gets two additions:
 
@@ -84,20 +84,20 @@ freed by the image.
 ## How it stays fast
 
 100 lots would be 100 page fetches scraped from the DOM. Instead the module uses
-HiBid's own GraphQL endpoint — the same one the app calls — so the whole page
+HiBid's own GraphQL endpoint: the same one the app calls, so the whole page
 costs **two requests**:
 
 - `lotSearch(eventItemIds: […])` — every lot's description in one POST, which is
   where `Est. Retail Price`, `Condition` and `Model` live. The tiles themselves
   carry only a title and a bid.
-- `auction(id) { termsAndConditions buyerPremium }` — the fee text, which a
+- `auction(id) { termsAndConditions buyerPremium }`: the fee text, which a
   catalog page never renders.
 
 Neither needs authentication for public catalogs. Then:
 
-1. **Pass 1** (no per-lot network) writes the final price onto all 100 tiles at
+1. Pass 1 (no per-lot network) writes the final price onto all 100 tiles at
    once — typically under 4 seconds.
-2. **Pass 2** looks up retail in batches of 6 (`catalogBatchSize`, 5–10) with a
+2. Pass 2 looks up retail in batches of 6 (`catalogBatchSize`, 5–10) with a
    350 ms gap between batches, painting each dot as its batch lands. The pulse
    loader stays up until the sweep finishes.
 
@@ -129,11 +129,11 @@ The politeness delay between batches exists to avoid hammering Amazon and Best B
 which is right. But every lot went through the same batch loop whether or not it
 needed a request: a parts-only lot is never looked up, a lot with no usable query
 cannot be, and a cached quote is already in hand. On a 100-lot page with every quote
-cached, the sweep issued **zero** retail requests and still took 6.6 seconds, 6.59s
+cached, the sweep issued zero retail requests and still took 6.6 seconds, 6.59s
 of which was `setTimeout` doing nothing.
 
 The sweep now runs in two phases — everything free resolves immediately, then only
-the lots that genuinely need fetching are batched and paced. Same page, same warm
+only the lots that need fetching are batched and paced. Same page, same warm
 cache:
 
 | | before | after |
@@ -143,7 +143,7 @@ cache:
 | Every dot resolved by | ~8.0s | **1.0–2.4s** |
 | Retail requests issued | 0 | 0 |
 
-A cold page is still network-bound and still paced exactly as before — that is what
+A cold page is still network-bound and still paced exactly as before: that is what
 the delay is for. What changed is that a page it cannot help no longer pays it.
 
 **`document.body.innerText` — 593ms in one blocking task.**
@@ -160,9 +160,9 @@ text extraction of the render tree:
 
 Layout is always dirty at that moment, because `Tidy.page()` has just added a body
 class. This was the longest single blocking task in the sweep. The page text is now
-read **only if the auction's own text did not name a province** — and since
+read only if the auction's own text did not name a province, and since
 `auctionTerms` already includes `shippingAndPickupInfo`, which carries the pickup
-address, it usually does. When the fallback is genuinely needed the inputs are
+address, it usually does. When the fallback is needed the inputs are
 identical to before.
 
 **Yielding inside the tile loop — measured, and reverted.**
@@ -196,11 +196,11 @@ queries further is not worth doing.
 writes. Reducing it means auditing `Tidy.tile`, `setFinal` and `setIndicator` for
 reads interleaved with writes, so the browser is not forced to re-layout mid-loop.
 The measurement is noisy on a live page — 537ms and 846ms on two consecutive runs of
-the same page — so that wants a controlled fixture before anyone tunes it.
+the same page, so that wants a controlled fixture before anyone tunes it.
 
-Two **dead ends**, recorded so they are not re-investigated: the document-wide
-`MutationObserver` fires only **3 times** on a catalog page, and injecting the
-stylesheet costs **0ms** (an earlier 280ms reading was an artifact of the
+Two dead ends, recorded so they are not re-investigated: the document-wide
+`MutationObserver` fires only 3 times on a catalog page, and injecting the
+stylesheet costs 0ms (an earlier 280ms reading was an artifact of the
 measurement forcing a style recalc the browser would have done anyway).
 
 ## Known limitation
@@ -209,5 +209,5 @@ On a measured run over 100 lots, 47 resolved to a live retail price and 53 did
 not. Two causes: generic goods with no model number produce a weak query that the
 relevance gate correctly refuses rather than guessing, and Amazon.ca throttles
 under a burst of ~100 lookups, leaving Best Buy Canada as the only source for
-much of the page. A grey dot means "unknown", never "bad deal" — the final price
+much of the page. A grey dot means "unknown", never "bad deal": the final price
 on the bid button is still exact, because it needs no lookup.

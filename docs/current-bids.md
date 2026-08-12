@@ -26,7 +26,7 @@ flat list into a decision:
 HiBid already tells you that you are losing. It does not tell you whether losing
 is the right outcome, which is the only question the page exists to answer.
 
-Lots in the **let it go** case — outbid *and* past your ceiling — are faded to 50%
+Lots in the let it go case — outbid *and* past your ceiling — are faded to 50%
 so they stop competing for attention with the ones you can still act on. Hover
 restores them; nothing is hidden, because the bid history is yours. Measured on a
 real page: 10 of 100 tiles faded.
@@ -51,7 +51,7 @@ it is ~200 retailer requests however they are arranged. That total cannot be
 argued away.
 
 What could be fixed is *which* answers arrive first. The sweep is ordered
-**outbid first**, then unknown, then winning — a lot you are being outbid on may
+**outbid first**, then unknown, then winning: a lot you are being outbid on may
 need action within minutes, one you are comfortably winning does not. The
 decisions you might act on resolve in the first seconds instead of after two
 minutes. Cached lots skip the politeness delay entirely, as on the catalog.

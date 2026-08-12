@@ -88,25 +88,25 @@ When no card can be built it still returns a wrapper above the title, as before.
 
 Re-parenting a component out of an Angular template is how a userscript breaks on
 the next deploy. So the reorder is `flex-direction: column` plus `order` on the
-columns HiBid already rendered — its nodes stay exactly where its change
+columns HiBid already rendered: its nodes stay exactly where its change
 detection expects them.
 
 The blocks that appear to move to the bottom box are not moved. The originals are
 hidden with `display: none` and the box is rebuilt from their own `href`s, read
-out of the DOM rather than guessed, so **Full catalog** and **Auctioneer page**
+out of the DOM rather than guessed, so **Full catalog** and Auctioneer page
 point at exactly what HiBid's buttons pointed at. Share is the one replacement:
 it uses `navigator.share` where available and the clipboard elsewhere, because
 borrowing `app-share`'s click handler would mean depending on it.
 
-Hiding is deliberately done twice — a class set on each run, plus `:has()`
+Hiding is deliberately done twice: a class set on each run, plus `:has()`
 selectors that survive an Angular re-render that replaces the nodes and takes the
 class with them. The `:has()` rules sit in their own declaration blocks so a
 browser without support loses those lines instead of the whole stylesheet.
 
-The **Information** accordion is hidden rather than emptied, because
+The Information accordion is hidden rather than emptied, because
 `enhanceDetail` still reads its table on every run — `textContent` works fine on
-a `display: none` subtree — and it is only hidden once the replacement card is
-actually on the page. If the card cannot be built, the **Retail (live)** and
+a `display: none` subtree, and it is only hidden once the replacement card is
+actually on the page. If the card cannot be built, the Retail (live) and
 **Bid guidance** rows are inserted into HiBid's table exactly as before.
 
 ### Notices become links
@@ -116,10 +116,10 @@ above the lot's own details. They become two small links at the foot of the page
 
 Expanding one shows **more** than the card did. HiBid renders roughly the first
 400 characters followed by a *Show More* anchor and fetches the rest on demand,
-so the DOM copy is genuinely incomplete: on lot 316725406 the Bidding Notice is
+so the DOM copy is incomplete: on lot 316725406 the Bidding Notice is
 447 characters in the page and 842 from `auction(id) { biddingNotice }`. The link
-opens the GraphQL text when it arrives and a clone of the truncated card until
-then — a clone, so the auctioneer's own links stay clickable.
+opens the GraphQL text when it arrives, and a clone of the truncated card until
+then, so the auctioneer's own links stay clickable.
 
 ![Notices and folds expanded](screenshot-detail-notices.png)
 
@@ -150,7 +150,7 @@ Two details worth knowing:
   location row keeps HiBid's own city/state/zip and the auctioneer's postal
   address is a separate row that only appears when it adds something.
 - **Timestamps are formatted as strings, not `Date`s.** The API returns
-  `2026-08-12T19:00:00` with no offset — it is already the auction's local wall
+  `2026-08-12T19:00:00` with no offset: it is already the auction's local wall
   clock. `new Date()` would apply the viewer's timezone and reprint a 7:00 PM
   close as 11:00 PM for anyone west of the auctioneer.
 
@@ -183,7 +183,7 @@ labels are quietened so the row reads at a glance.
 
 Five of the six are one stylesheet rule each, scoped to `body.hes-detail`. That
 matters: Angular re-renders this subtree on every bid update and every countdown
-tick, and an inline style set before one of those is simply gone — which is how
+tick, and an inline style set before one of those is simply gone, which is how
 the catalog's share link kept coming back. A rule cannot be re-rendered away.
 
 The sixth is text, and CSS cannot rewrite text. `Max:` and `(13)` are applied by
@@ -221,18 +221,18 @@ For scale, on hibid lot 316725406 the *unenhanced* page measures 1195px of
 lot's page, and almost all of it is figures that were not on the page at all.
 
 What would actually shorten it is folding something the reader usually does not
-need — the facts grid, or the supporting table once the max bid is trusted. That
+need: the facts grid, or the supporting table once the max bid is trusted. That
 is a product decision about what a "fast decision" needs on screen, so it is
 flagged here rather than taken unilaterally.
 
 ### One set of numbers, not two
 
 The **Bid guidance** block used to repeat the decision's table almost row for row
-— max bid, walk away, next bid, fees & tax, final cost — a few hundred pixels
+— max bid, walk away, next bid, fees & tax, final cost: a few hundred pixels
 below it. Two identical tables on one screen invite the reader to hunt for a
 difference that is not there, so inside the card the table is suppressed and the
 block keeps only what the decision does not carry: the fee provenance. It is
-relabelled **Fees** when that happens. Worth 203px on the encore lot and 138px on
+relabelled Fees when that happens. Worth 203px on the encore lot and 138px on
 hibid.com when it landed.
 
 The condition is the *absence of a next-bid amount*, not simply "is there a card":

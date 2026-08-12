@@ -25,8 +25,8 @@ item*, Ontario 13% HST:
 | $104.00 | $16.64 | $1.50 | $15.87 | **$138.01** | 50.4% under ← the ceiling |
 | $157.00 | $25.12 | $1.50 | $23.92 | **$207.54** | 25.3% under ← walk away |
 
-So the script reports **BID UP TO $104.00** for a 50%-off deal, with a hard
-walk-away at **$156.00**.
+So the script reports BID UP TO $104.00 for a 50%-off deal, with a hard
+walk-away at $156.00.
 
 Tax is applied to the whole invoice (hammer + premium + fees), which is how
 Ontario auctioneers bill it.

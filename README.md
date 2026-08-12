@@ -5,7 +5,7 @@
 **Is this auction lot actually a good deal? This tells you, before you bid.**
 
 HiBid shows you a bid amount. What it doesn't show you is what that bid will
-really cost once the auction house adds its fees and tax — or whether the thing
+really cost once the auction house adds its fees and tax, or whether the thing
 you're bidding on is cheaper on Amazon right now.
 
 This adds both, automatically, on every lot page and every list of lots.
@@ -25,8 +25,8 @@ Canada and shows the price of a brand-new one, with links so you can check for
 yourself.
 
 **The most you should bid.** Working backwards from that retail price and the
-auction's own fees, you get one number: the highest bid where you'd still be
-getting a genuine bargain — and a walk-away point above it.
+auction's own fees, you get one number: the highest bid that still leaves you
+ahead of retail, plus a walk-away point above it.
 
 ![The decision, up front](docs/screenshot-bluf-card.png)
 
@@ -34,19 +34,19 @@ getting a genuine bargain — and a walk-away point above it.
 coloured dot tells you which ones are worth a second look. Hover any dot for the
 discount.
 
-| | |
-|---|---|
-| 🟢 green | under half the retail price — worth a look |
-| 🟡 yellow | 50–65% of retail — decent |
-| 🟠 orange | 65–75% — thin once fees land |
-| 🔴 red | over 75% — you're not really saving |
-| ⚫ dark | listed as parts-only or broken |
-| ⚪ grey | couldn't find a price — check it yourself |
+| Dot | Final cost vs retail | What it means |
+|---|---|---|
+| 🟢 green | under 50% | half price or better |
+| 🟡 yellow | 50–65% | decent |
+| 🟠 orange | 65–75% | thin once fees land |
+| 🔴 red | over 75% | you're not really saving |
+| ⚫ dark | — | listed as parts-only or broken |
+| ⚪ grey | — | no price found; check it yourself |
 
 ![Catalog tiles](docs/screenshot-catalog-tiles.png)
 
 **A loud warning when a lot is broken.** If the listing says parts-only, damaged
-or missing pieces, you get a banner you can't miss — and the retail comparison
+or missing pieces, you get a banner you can't miss, and the retail comparison
 switches off, because a working unit's price tells you nothing about a broken one.
 
 **Your own bids, triaged.** On your current bids page every lot tells you whether
@@ -57,17 +57,17 @@ fade into the background so they stop competing for your attention.
 
 ## Install
 
-1. Install [Tampermonkey](https://www.tampermonkey.net/) — a free browser
+1. Install [Tampermonkey](https://www.tampermonkey.net/), a free browser
    extension for Chrome, Edge or Firefox.
 2. **[Click here to install the script](https://raw.githubusercontent.com/dgomesbr/hibid-enhancer-suite/main/src/hibid-enhancer.user.js)**
-   — Tampermonkey shows an install page. Accept it.
+   Tampermonkey shows an install page. Accept it.
 3. Open any HiBid lot or catalog page. That's it.
 
 The first time it runs, Tampermonkey asks permission to check prices at
-`amazon.ca` and `bestbuy.ca`. **Say yes** — that's how it finds what things are
+`amazon.ca` and `bestbuy.ca`. Say yes. That is how it finds what things are
 worth. Say no and everything still works except the retail comparison.
 
-**No account, no API key, no signup.** Nothing to configure.
+No account, no API key, no signup. Nothing to configure.
 
 ### Keeping it up to date
 
@@ -95,7 +95,8 @@ loads. Re-check before you bid.
 
 **Fees are read from the auctioneer's own words**, which are free text and
 sometimes vague. Every number comes with a *"how these fees were determined"* note
-showing the exact sentence it came from — worth opening before you bid real money.
+showing the exact sentence it came from. Open it before you bid real money, so you
+can see whether the premium was parsed or guessed.
 
 **Sometimes it can't find a price.** A grey dot means *unknown*, never *bad deal*.
 The final cost on the bid button is still exact, because that needs no lookup.
@@ -104,7 +105,7 @@ The final cost on the bid button is still exact, because that needs no lookup.
 
 **Your data stays yours.** Nothing is sent anywhere except the price lookups. On
 your bids page the script deliberately doesn't read your maximum bid at all,
-because getting at it would mean handling your login token —
+because getting at it would mean handling your login token:
 [details here](docs/current-bids.md).
 
 ---

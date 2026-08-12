@@ -37,7 +37,7 @@ router navigation, not a page load. Two things went wrong there.
 
 **The URL changes before the content does.** Enhancing in that window read the
 *previous* lot's rows and pinned its retail price and bid ceiling onto the new
-lot — and because the run then recorded the new path as done, the MutationObserver
+lot, and because the run then recorded the new path as done, the MutationObserver
 never came back to correct it. The enhancement appeared to stop working for the
 rest of the session.
 
@@ -93,7 +93,7 @@ Measured on lot 317094503, 1280px viewport:
 | `gql lot` / `gql auction` (detached) | 1,700–3,600 each |
 | `enriched render` | 2.9 |
 
-The synchronous pass is not where the time goes — the network is, and it is
+The synchronous pass is not where the time goes: the network is, and it is
 already detached. Three things were still worth fixing, and all three came out of
 these numbers:
 
@@ -131,7 +131,7 @@ characters and the credit-card surcharge is mentioned at character 441 — insid
 the part that is missing.
 
 So pass 3 parses the fee stack a second time, with `GQL.auctionTerms` appended to
-the same DOM sources — the identical helper the catalog uses, so both pages derive
+the same DOM sources: the identical helper the catalog uses, so both pages derive
 fees from one definition of "the auction's fee text". It runs alongside the other
 pass-3 queries, so the extra request costs no wall-clock time. Two things follow:
 

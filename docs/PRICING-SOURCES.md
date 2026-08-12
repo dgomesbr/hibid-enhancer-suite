@@ -20,24 +20,24 @@ endpoints do work and are what the script uses.
 
 ## How the script combines them
 
-1. **Amazon.ca** and **Best Buy Canada** are queried in parallel, results cached
+1. **Amazon.ca** and Best Buy Canada are queried in parallel, results cached
    12h per query.
-2. The cheapest **brand new** quote becomes the benchmark. A used/open-box quote
+2. The cheapest brand new quote becomes the benchmark. A used/open-box quote
    is only used if nothing new was found anywhere, and is labelled as such.
 3. The auctioneer's own `Retail $…` claim is always displayed alongside, so you
    can see when they are inflating it.
 4. If the live price diverges from the auctioneer's figure by more than ~3× in
-   either direction, a **price sanity check** warning appears — that pattern
+   either direction, a price sanity check warning appears: that pattern
    almost always means the wrong product was matched, not that a bargain exists.
 
 ### Real failure modes found in live data
 
 - **Accessories that name the product.** `Spigen Rugged Armor Designed for Sony
   WF-1000XM5 Case` at **$26.99** and `SAHARA Venture Series Silicone Case for
-  Sony WF-1000XM5` at **$52.00** both match brand and model perfectly. Rejected
+  Sony WF-1000XM5` at $52.00 both match brand and model perfectly. Rejected
   by three independent signals (see README).
 - **Open-box posing as retail.** Best Buy's results for this product were
-  *entirely* marketplace listings, the cheapest being a **$274.99 Open Box** unit.
+  *entirely* marketplace listings, the cheapest being a $274.99 Open Box unit.
   Treating that as "retail" understates how bad an auction bid is, so condition
   and seller are scored separately and new-vs-used is decided on the title.
 - **Sponsored placements.** The first three Amazon.ca results were unrelated JBL
@@ -56,15 +56,15 @@ endpoints do work and are what the script uses.
 The original request was to register for a pricing API and keep the token in
 1Password via the CLI. That is **not applicable as specified**, for two reasons:
 
-1. **No secret is needed.** Both price sources used by default are key-free, so
+1. No secret is needed. Both price sources used by default are key-free, so
    the default install has nothing to store.
-2. **A userscript cannot reach 1Password.** Tampermonkey code runs inside the
+2. A userscript cannot reach 1Password. Tampermonkey code runs inside the
    browser page sandbox; it cannot shell out to `op`. Even with a vault entry, the
    script could not read it at runtime. (Separately, the `op` CLI is not currently
    installed on this machine — `op: command not found`.)
 
-The only optional secret is a **Keepa** key, and Keepa has no free tier. If you
-subscribe, the key goes in via the Tampermonkey **settings** menu command and is
+The only optional secret is a Keepa key, and Keepa has no free tier. If you
+subscribe, the key goes in via the Tampermonkey settings menu command and is
 held in Tampermonkey's own extension storage — never committed, and only ever
 sent to `api.keepa.com`.
 

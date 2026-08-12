@@ -16,10 +16,10 @@ nobody.
 | `package.json` → `"version"` | `0.12.1` |
 | the git tag | `v0.12.1` |
 
-`npm test` fails if the first two disagree — that check exists precisely so a
+`npm test` fails if the first two disagree: that check exists precisely so a
 forgotten bump cannot become a silent non-release.
 
-- **patch** (`0.2.0` → `0.2.1`) — a fix to existing behaviour: a bad selector, a
+- **patch** (`0.2.0` → `0.2.1`): a fix to existing behaviour: a bad selector, a
   fee wording that failed to parse, a wrong price match.
 - **minor** (`0.2.0` → `0.3.0`) — new capability: another page type, another
   price provider, a new banner.

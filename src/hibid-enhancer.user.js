@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HiBid Enhancer Suite
 // @namespace    https://github.com/dgomesbr/hibid-enhancer-suite
-// @version      0.9.0
+// @version      0.10.0
 // @description  Retail price lookup, fee-aware bid ceilings, and loud condition warnings on HiBid lot pages.
 // @author       dgomesbr
 // @license      MIT

@@ -12,9 +12,9 @@ nobody.
 
 | Where | Example |
 |---|---|
-| `src/hibid-enhancer.user.js` → `// @version` | `0.2.0` |
-| `package.json` → `"version"` | `0.2.0` |
-| the git tag | `v0.2.0` |
+| `src/hibid-enhancer.user.js` → `// @version` | `0.3.0` |
+| `package.json` → `"version"` | `0.3.0` |
+| the git tag | `v0.3.0` |
 
 `npm test` fails if the first two disagree — that check exists precisely so a
 forgotten bump cannot become a silent non-release.
@@ -80,5 +80,6 @@ the parser fix so the suite keeps its teeth.
 
 | Version | Highlights |
 |---|---|
+| `v0.3.0` | Fixed a false parts-only banner on structured descriptions, curly-apostrophe premium parsing, empty search queries, and `+` in model codes. Summary panel redesigned as a table in HiBid's palette. |
 | `v0.2.0` | "H+" icon for the Tampermonkey dashboard; release process and version-consistency checks. |
 | `v0.1.0` | Lot detail page: live Canadian retail pricing, fee-aware bid ceilings, bad-deal and parts-only banners, non-blocking rendering with pulse loader. |

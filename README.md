@@ -10,9 +10,14 @@ highest hammer price that still beats retail after **buyer's premium + handling
 fees + HST**. It shouts at you when a lot is a bad deal, and shouts louder when
 the lot is broken.
 
-![Verdict banner](docs/screenshot-verdict.png)
+![Summary panel](docs/screenshot-summary.png)
 
 ![Injected pricing rows](docs/screenshot-info-rows.png)
+
+When the price is too close to retail the same panel turns red and leads with
+what you are about to pay instead of a ceiling:
+
+![Bad deal panel](docs/screenshot-summary-bad.png)
 
 ## What it does on a lot detail page
 
@@ -21,7 +26,8 @@ the lot is broken.
 | **Product identification** | Extracts the real product name from the lot description, stripping the `Retail $328.00 \|` prefix, the `****` separator and the auctioneer's `Notes:` block. Builds a tight search query (`Sony WF-1000XM5`), keeping capacity where it moves price (`CORSAIR Vengeance DDR5 32GB`). |
 | **Live retail price** | A **Retail (live)** row is injected directly beneath the auctioneer's **Estimate** row, with the price, the matched product title, a condition badge, and deep links — including a CamelCamelCamel price-history link for the exact ASIN. |
 | **Fee-aware bid ceiling** | A **Bid guidance** row shows `BID UP TO $X` — the highest hammer price whose all-in cost still clears your target discount — rounded down to a bid the site will actually accept. |
-| **Red bad-deal banner** | If the next required bid lands less than 25% under retail, a red box goes to the top of the page with the all-in cost, the retail price, a link to a brand-new one, and the ceiling you have already blown past. |
+| **Summary panel** | One dark panel at the top of the page: the decision in 40px type, then a table of retail / next bid / fees & tax / **final cost** / max bid / walk-away. Styled from HiBid's own palette (brand blue `#266296`, near-black, their orange `#e65100`); money that leaves your pocket is orange. |
+| **Red bad-deal panel** | If the next required bid lands less than 25% under retail the panel turns red and the hero number becomes the final cost you are about to pay, not a ceiling. |
 | **Parts-only banner** | 💀 If the **lot's own** description says parts-only / broken / damaged / `Is Item Damaged? Yes`, a black-and-red banner goes above everything else, and **all retail comparison and bid advice is suppressed** — a working unit's price is not a valid comparison for a broken one. |
 | **Fee provenance** | Every fee is shown with the exact sentence it was parsed from, so a wrong number is traceable instead of magic. |
 | **Never blocks the page** | Two-pass rendering: everything derivable from the DOM appears instantly, the network lookup runs detached. A pulse loader in the top-right corner shows while it is in flight. |
@@ -52,6 +58,27 @@ Concretely, on the reference lot with a deliberately slowed network:
 
 A generation counter drops stale results, so a slow lookup for a lot you have
 already navigated away from can never overwrite the current one.
+
+### Structured description fields
+
+Many auctioneers write the description as a field block rather than prose:
+
+```
+Est. Retail Price: 251.00
+Condition: BRAND NEW - OPEN BOX
+Model: NT-USB+
+Is Item Functional? Yes
+Is Item Damaged? No
+Missing Major Parts? No
+```
+
+These are parsed as fields, not scanned as text, and that distinction matters:
+the *label* "Is Item Damaged?" contains the word "damaged" and "Missing Major
+Parts?" contains "parts", so a keyword scan flags a brand-new item as broken.
+Yes/No answers are read as answers — `Is Item Damaged? No` means not damaged —
+and the keyword scan only ever runs on the `Condition:` value and the remaining
+prose. `Model:` is also used as the search token, which is how `NT-USB+` (a model
+code with no digits in it) survives into the query.
 
 ### The money
 
@@ -157,7 +184,7 @@ never sent anywhere except `api.keepa.com`.
 ## Tests
 
 ```bash
-node test/run-tests.mjs            # 96 assertions, no dependencies
+node test/run-tests.mjs            # 126 assertions, no dependencies
 
 npm install --no-save linkedom     # provides DOMParser for Node
 node test/run-provider-tests.mjs   # 29 assertions against real captured responses

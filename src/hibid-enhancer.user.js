@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HiBid Enhancer Suite
 // @namespace    https://github.com/dgomesbr/hibid-enhancer-suite
-// @version      0.2.0
+// @version      0.3.0
 // @description  Retail price lookup, fee-aware bid ceilings, and loud condition warnings on HiBid lot pages.
 // @author       dgomesbr
 // @license      MIT
@@ -97,6 +97,74 @@
   }
 
   const txt = (el) => (el && el.textContent ? el.textContent.trim() : '');
+
+  /**
+   * Normalise typography before any regex touches the text.
+   *
+   * Auctioneers paste from Word: "A 16% Buyer’s Premium" uses U+2019, not an
+   * ASCII apostrophe. Matching only `'` silently missed the premium and fell
+   * back to the 18% default, which quietly changed every bid ceiling on the
+   * page. Non-breaking spaces break `\s`-based patterns the same way.
+   */
+  function normalise(s) {
+    return String(s == null ? '' : s)
+      .replace(/[‘’ʼ′]/g, "'")
+      .replace(/[“”]/g, '"')
+      .replace(/[–—]/g, '-')
+      .replace(/[   ]/g, ' ');
+  }
+
+  /**
+   * Many auctioneers write the description as a block of structured fields:
+   *
+   *     Est. Retail Price: 251.00
+   *     Condition: BRAND NEW - OPEN BOX
+   *     Model: NT-USB+
+   *     Is Item Functional? Yes
+   *     Is Item Damaged? No
+   *     Missing Major Parts? No
+   *
+   * Returns { fields, free } where `free` is the prose with those lines removed.
+   * Scanning the raw block for keywords is a trap: the *label* "Is Item
+   * Damaged?" contains "damaged" and "Missing Major Parts?" contains "parts",
+   * so a lot answering "No" to both looked broken.
+   */
+  const FIELD_LINE_RE = /^[ \t]*([^:?\n]{2,60}?)[ \t]*([:?])[ \t]*(.*)$/;
+
+  function parseFields(text) {
+    const fields = {};
+    const freeLines = [];
+    for (const line of normalise(text).split(/\r?\n/)) {
+      const m = line.match(FIELD_LINE_RE);
+      if (m && m[1].trim()) {
+        const key = m[1].trim().toLowerCase().replace(/\s+/g, ' ');
+        const value = m[3].trim();
+        // "Label?" with no answer is not a field, it is prose.
+        if (m[2] === '?' && !value) { freeLines.push(line); continue; }
+        fields[key] = value;
+      } else if (line.trim()) {
+        freeLines.push(line);
+      }
+    }
+    return { fields, free: freeLines.join('\n').trim() };
+  }
+
+  /** Yes/No answer of a structured field: true, false, or null if absent. */
+  function yesNo(value) {
+    if (value == null) return null;
+    const v = String(value).trim().toLowerCase();
+    if (/^(yes|y|true)\b/.test(v)) return true;
+    if (/^(no|n|false|none)\b/.test(v)) return false;
+    return null;
+  }
+
+  /** First present field among several aliases. */
+  function field(fields, ...names) {
+    for (const n of names) {
+      if (Object.prototype.hasOwnProperty.call(fields, n)) return fields[n];
+    }
+    return null;
+  }
 
   function el(tag, attrs = {}, children = []) {
     const node = document.createElement(tag);
@@ -211,7 +279,9 @@
    * even when the terms say 16%), so everything here is text-driven.
    */
   function parseFees(sources) {
-    const all = sources.filter(Boolean).join('\n\n');
+    // normalise() first: "A 16% Buyer’s Premium" (curly apostrophe) otherwise
+    // failed every premium pattern and silently fell back to the 18% default.
+    const all = normalise(sources.filter(Boolean).join('\n\n'));
     const out = {
       premiumPct: null, premiumSource: null,
       perItemFee: 0, perItemSource: null,
@@ -343,12 +413,33 @@
   const POSITIVE_RE = /\b(tested\s*(?:and\s*)?working|works?\s*(?:great|well|fine|perfectly)|fully\s*functional|brand\s*new|sealed|new\s*in\s*box|nib\b)/i;
 
   function assessCondition(lotText) {
-    const t = lotText || '';
-    const parts = PARTS_PATTERNS.filter((p) => p.re.test(t)).map((p) => p.label);
-    const positive = POSITIVE_RE.test(t);
-    let cautions = CAUTION_PATTERNS.filter((p) => p.re.test(t)).map((p) => p.label);
+    const { fields, free } = parseFields(lotText || '');
 
-    // "Notes: Tested Working." beats a bare "untested"/"used" mention.
+    // Structured yes/no answers are authoritative — they are the auctioneer
+    // answering a direct question, not prose to be keyword-matched.
+    const damaged = yesNo(field(fields, 'is item damaged', 'item damaged', 'damaged'));
+    const missing = yesNo(field(fields, 'missing major parts', 'missing parts', 'missing any parts'));
+    const functional = yesNo(field(fields, 'is item functional', 'item functional', 'functional', 'working'));
+    const conditionText = field(fields, 'condition') || '';
+    const notes = [field(fields, 'notes'), field(fields, 'note')].filter(Boolean).join(' ');
+
+    const parts = [];
+    if (damaged === true) parts.push('structured field: Is Item Damaged? = Yes');
+    if (missing === true) parts.push('structured field: Missing Major Parts? = Yes');
+    if (functional === false) parts.push('structured field: Is Item Functional? = No');
+
+    /*
+     * Keyword scan runs on the CONDITION VALUE and the remaining prose only —
+     * never on the field labels. "Is Item Damaged? No" must not read as damage.
+     */
+    const scan = [conditionText, notes, free].filter(Boolean).join('\n');
+    for (const p of PARTS_PATTERNS) {
+      if (p.re.test(scan)) parts.push(p.label);
+    }
+
+    const positive = POSITIVE_RE.test([conditionText, notes, free].join('\n')) || functional === true;
+
+    let cautions = CAUTION_PATTERNS.filter((p) => p.re.test(scan)).map((p) => p.label);
     if (positive) cautions = cautions.filter((c) => !/untested|not tested|used/.test(c));
 
     return {
@@ -356,6 +447,8 @@
       partsReasons: [...new Set(parts)],
       cautions: [...new Set(cautions)],
       positive,
+      condition: conditionText,
+      fields,
     };
   }
 
@@ -371,7 +464,14 @@
   ]);
 
   /** Model-number-ish tokens: WF-1000XM5, B650, RTX4090, DDR5, 55A85K. */
-  const MODEL_RE = /^[A-Za-z]{1,6}[-–]?\d{1,6}[A-Za-z0-9-]*$/;
+  const MODEL_RE = /^[A-Za-z]{1,6}-?\d{1,6}[A-Za-z0-9+-]*$/;
+
+  /**
+   * Hyphenated model codes with no digits at all: NT-USB+, XLR-M, SM-BH.
+   * MODEL_RE requires a digit run, so these read as ordinary words and the
+   * search query lost the token that actually identifies the product.
+   */
+  const MODEL_ALT_RE = /^[A-Za-z]{1,6}-[A-Za-z0-9+.]{2,12}$/;
 
   /** Capacity/spec tokens that materially move price: 32GB, 2TB, 1TB. */
   const CAPACITY_RE = /^\d+(?:\.\d+)?(?:gb|tb|mb)$/i;
@@ -383,17 +483,32 @@
    * Leads look like:
    *   "Retail $328.00 | Sony WF-1000XM5 The Best Truly Wireless ... , Black"
    *   "$650 CORSAIR Vengeance DDR5 32GB (2x16GB) 6000MHz"
+   *
+   * Descriptions are sometimes prose and sometimes a pure block of structured
+   * fields with no product name in them at all:
+   *
+   *   Est. Retail Price: 251.00
+   *   Condition: BRAND NEW - OPEN BOX
+   *   Model: NT-USB+
+   *
+   * In that case the name has to come from the Lead, and `Model:` is a better
+   * model token than anything guessable from the title.
    */
   function extractProduct(lead, description) {
-    const source = (description && description.length > (lead || '').length) ? description : (lead || '');
-    let s = source;
+    const leadText = normalise(lead || '').trim();
+    const { fields, free } = parseFields(description || '');
 
-    // Cut the auctioneer's trailing notes block.
-    s = s.split(/\n\s*\*{2,}/)[0];
-    s = s.split(/\n\s*Notes?\s*:/i)[0];
-    s = s.split(/\bCondition\s*:/i)[0];
-    s = s.split(/\bEst\.?\s*Retail\s*Price\s*:/i)[0];
-    s = s.replace(/\r/g, ' ').replace(/\n+/g, ' ').trim();
+    // Prose from the description, if there is any; otherwise fall back to the
+    // Lead. Previously a structured-only description produced an empty name and
+    // an empty search query, which left every retail link unpopulated.
+    const descProse = free
+      .split(/\n\s*\*{2,}/)[0]
+      .replace(/\r/g, ' ')
+      .replace(/\n+/g, ' ')
+      .trim();
+
+    const source = descProse.length > leadText.length ? descProse : (leadText || descProse);
+    let s = source;
 
     // Drop a leading "Retail $328.00 |" / "$650 |" segment.
     const segs = s.split('|').map((x) => x.trim()).filter(Boolean);
@@ -408,17 +523,26 @@
       .replace(/\s{2,}/g, ' ')
       .trim();
 
-    // Trim marketing tail at the first comma that precedes only a colour word.
-    const fullName = named.replace(/\s*[-–]\s*$/, '').trim();
+    // Last resort: never return an empty name just because the description was
+    // all structured fields and the lead was missing.
+    let fullName = named.replace(/\s*-\s*$/, '').trim();
+    if (fullName.length < 3) fullName = leadText || normalise(description || '').split('\n')[0].trim();
 
     // --- build the search query --------------------------------------------
+    // A trailing "+" is part of the model on plenty of products (NT-USB+,
+    // Pixel 9 Pro+), so it survives token cleaning.
     const tokens = fullName.split(/[\s,;/]+/).filter(Boolean);
     const cleaned = tokens
-      .map((t) => t.replace(/^[^A-Za-z0-9]+|[^A-Za-z0-9-]+$/g, ''))
+      .map((t) => t.replace(/^[^A-Za-z0-9]+|[^A-Za-z0-9+-]+$/g, ''))
       .filter((t) => t && !NOISE_WORDS.has(t.toLowerCase()) && !/^\$?[\d.,]+$/.test(t));
 
     const brand = cleaned[0] || '';
-    const model = cleaned.find((t) => MODEL_RE.test(t) && !/^\d+$/.test(t));
+
+    // An explicit "Model:" field beats anything inferred from the title.
+    const statedModel = (field(fields, 'model', 'model #', 'model number', 'mpn') || '').trim();
+    const model = (statedModel && statedModel.length <= 24 ? statedModel : null) ||
+      cleaned.find((t) => MODEL_RE.test(t) && !/^\d+$/.test(t)) ||
+      cleaned.find((t) => MODEL_ALT_RE.test(t));
 
     // Query = brand + product line + model + capacity, in that order. Keeping
     // the capacity matters: a 32GB kit and a 16GB kit are not the same comp.
@@ -451,7 +575,7 @@
 
   /** Retail price the auctioneer themselves embedded in the listing. */
   function extractStatedRetail(lead, description, estimateText) {
-    const hay = [lead, description].filter(Boolean).join('\n');
+    const hay = normalise([lead, description].filter(Boolean).join('\n'));
     const patterns = [
       /Est\.?\s*Retail\s*Price\s*:?\s*\$?\s*([\d,]+(?:\.\d{1,2})?)/i,
       /\bRetail\s*(?:Price)?\s*:?\s*\$\s*([\d,]+(?:\.\d{1,2})?)/i,
@@ -889,7 +1013,13 @@
     if (!quotes || !quotes.length) return null;
     const news = quotes.filter(isNewQuote);
     const pool = news.length ? news : quotes;
-    return pool.reduce((a, b) => (b.price < a.price ? b : a));
+    // Cheapest wins; on a tie prefer a plain "new" over "new (marketplace)",
+    // since a first-party listing is the more defensible retail reference.
+    return pool.reduce((a, b) => {
+      if (b.price < a.price) return b;
+      if (b.price > a.price) return a;
+      return (b.condition === 'new' && a.condition !== 'new') ? b : a;
+    });
   }
 
   // ===========================================================================
@@ -938,6 +1068,61 @@
     .${NS}-break code{background:#f4f4f4;padding:0 3px;border-radius:3px;}
     .${NS}-btn{cursor:pointer;background:#1565c0;color:#fff;border:0;border-radius:5px;padding:4px 10px;font-size:12px;}
     .${NS}-btn:hover{background:#0d47a1;}
+
+    /* ---- Summary panel -------------------------------------------------
+       Palette lifted from HiBid: brand blue #266296, near-black #212529,
+       their orange #e65100. Money leaving your pocket is orange. */
+    .${NS}-panel{--hes-blue:#266296;--hes-ink:#0d1b28;--hes-line:rgba(255,255,255,.13);
+      --hes-dim:#9db4c9;--hes-orange:#ff9a3c;
+      background:linear-gradient(160deg,#0d1b28 0%,#14283b 62%,#173352 100%);
+      color:#eaf2f9;border-radius:10px;padding:16px 18px 14px;margin:0 0 12px;
+      border-left:6px solid var(--hes-blue);
+      box-shadow:0 3px 14px rgba(13,27,40,.28);
+      font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;}
+    .${NS}-panel-good{border-left-color:#2e9e5b;}
+    .${NS}-panel-warn{border-left-color:var(--hes-orange);}
+    .${NS}-panel-bad{border-left-color:#e53935;
+      background:linear-gradient(160deg,#2a0f14 0%,#3b1419 60%,#4a1a1f 100%);}
+    .${NS}-panel-neutral{border-left-color:var(--hes-blue);}
+
+    .${NS}-panel-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:2px;}
+    .${NS}-verdict{font-size:12px;font-weight:800;letter-spacing:1.1px;text-transform:uppercase;
+      color:#cfe2f2;}
+    .${NS}-panel-good .${NS}-verdict{color:#7ee2a8;}
+    .${NS}-panel-warn .${NS}-verdict{color:var(--hes-orange);}
+    .${NS}-panel-bad .${NS}-verdict{color:#ff8a80;}
+    .${NS}-panel-sub{font-size:12.5px;color:var(--hes-dim);}
+
+    .${NS}-hero{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin:2px 0 12px;}
+    .${NS}-hero-label{font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;
+      color:var(--hes-dim);}
+    .${NS}-hero-value{font-size:40px;line-height:1.05;font-weight:800;letter-spacing:-.5px;
+      color:var(--hes-orange);font-variant-numeric:tabular-nums;}
+    .${NS}-panel-bad .${NS}-hero-value{color:#ff7043;}
+
+    .${NS}-sumtable{width:100%;border-collapse:collapse;font-size:13.5px;}
+    .${NS}-sumtable th,.${NS}-sumtable td{padding:6px 10px 6px 0;text-align:left;vertical-align:baseline;
+      border-bottom:1px solid var(--hes-line);}
+    .${NS}-sumtable tr:last-child th,.${NS}-sumtable tr:last-child td{border-bottom:0;}
+    .${NS}-sumtable th{font-weight:600;color:var(--hes-dim);white-space:nowrap;width:34%;}
+    .${NS}-num{font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap;width:22%;color:#f4f9fd;}
+    .${NS}-num-accent{color:var(--hes-orange);font-size:16px;font-weight:800;}
+    .${NS}-tr-accent th{color:#e6f0f8;font-weight:800;text-transform:uppercase;letter-spacing:.6px;font-size:12px;}
+    .${NS}-sumtable .${NS}-note{color:var(--hes-dim);font-size:12.5px;white-space:normal;}
+    .${NS}-panel-notes{margin-top:10px;font-size:12.5px;color:var(--hes-dim);}
+    .${NS}-panel .${NS}-links{margin-top:12px;}
+    .${NS}-panel .${NS}-chip{background:rgba(255,255,255,.07);border-color:rgba(255,255,255,.22);
+      color:#dbe9f6;}
+    .${NS}-panel .${NS}-chip:hover{background:rgba(255,255,255,.16);border-color:#fff;}
+    .${NS}-panel code{background:rgba(255,255,255,.1);color:#e8f1f8;padding:0 4px;border-radius:3px;}
+    .${NS}-panel strong{color:#fff;}
+
+    /* Compact table reused inside the "Bid guidance" info row (light context). */
+    .${NS}-mini{border-collapse:collapse;font-size:13px;margin:2px 0 4px;}
+    .${NS}-mini th{text-align:left;font-weight:600;color:#4a5b6b;padding:3px 12px 3px 0;white-space:nowrap;}
+    .${NS}-mini td{padding:3px 0;font-weight:700;font-variant-numeric:tabular-nums;color:#16283b;}
+    .${NS}-mini .${NS}-mini-accent{color:#e65100;font-size:15px;}
+    .${NS}-mini .${NS}-mini-note{font-weight:400;color:#6b7c8c;font-size:12px;padding-left:12px;}
 
     /* Floating pulse loader. Purely decorative: fixed, non-interactive, and it
        never gates rendering — the page and every DOM-derived block are already
@@ -1089,6 +1274,41 @@
     return el('a', { class: `${NS}-chip`, href, target: '_blank', rel: 'noopener noreferrer', text: label });
   }
 
+  /**
+   * The summary panel: one dark card that answers "what do I bid, and what will
+   * it really cost me", with the decision as the largest thing on screen.
+   *
+   * Palette is taken from HiBid itself (brand blue #266296, near-black #212529,
+   * their existing orange #e65100) so it reads as part of the site rather than
+   * a bolted-on widget. Money that leaves your pocket is orange; everything else
+   * is blue-grey.
+   */
+  function summaryPanel({ tone, verdict, heroLabel, heroValue, heroNote, rows, notes, links }) {
+    const table = el('table', { class: `${NS}-sumtable` }, [
+      el('tbody', {}, rows.filter(Boolean).map((r) => el('tr', { class: r.accent ? `${NS}-tr-accent` : null }, [
+        el('th', { text: r.label }),
+        el('td', { class: `${NS}-num${r.accent ? ` ${NS}-num-accent` : ''}`, html: r.value }),
+        el('td', { class: `${NS}-note`, html: r.note || '' }),
+      ]))),
+    ]);
+
+    return el('div', { class: `${NS}-panel ${NS}-panel-${tone}` }, [
+      el('div', { class: `${NS}-panel-head` }, [
+        el('span', { class: `${NS}-verdict`, text: verdict }),
+        heroNote ? el('span', { class: `${NS}-panel-sub`, html: heroNote }) : null,
+      ]),
+      el('div', { class: `${NS}-hero` }, [
+        el('span', { class: `${NS}-hero-label`, text: heroLabel }),
+        el('span', { class: `${NS}-hero-value`, text: heroValue }),
+      ]),
+      table,
+      notes && notes.length
+        ? el('div', { class: `${NS}-panel-notes`, html: notes.filter(Boolean).join('<br>') })
+        : null,
+      links || null,
+    ]);
+  }
+
   /** Explain the fee stack so the number is auditable, not magic. */
   function feeBreakdown(fees, cost, opts) {
     const bits = [
@@ -1232,88 +1452,119 @@
       current: ctx.current, next, maxHammer, maxBid, nextCost, nextDisc, cond, pending,
     });
 
-    // ---- verdict banner --------------------------------------------------
+    // ---- summary panel ---------------------------------------------------
     host.verdict.textContent = '';
+
+    const links = el('div', { class: `${NS}-links` }, retailLinks(product, best, stated));
+    const feeNote = [
+      `${fees.premiumPct}% premium`,
+      fees.cardPct ? `${fees.cardPct}% card` : null,
+      fees.perItemFee ? `${money(fees.perItemFee)} handling` : null,
+      `${fees.taxPct}% tax`,
+    ].filter(Boolean).join(' &middot; ');
+
+    const provisional = pending && !best && stated
+      ? 'Provisional — using the auctioneer&rsquo;s unverified figure while live prices load.'
+      : (pending ? 'Checking live retail prices&hellip;' : null);
 
     if (cond.partsOnly) {
       /*
-       * No retail-derived verdict for a parts-only lot. A working unit's price
+       * No retail-derived ceiling for a parts-only lot: a working unit's price
        * is not a valid comparison for a broken one, and printing "GOOD DEAL"
-       * under a parts-only warning is exactly the contradiction that gets
-       * someone to bid on junk. The all-in cost is still shown — that part is
-       * factual regardless of condition.
+       * under a parts-only warning is what gets someone to bid on junk. The
+       * final cost is still shown, because that part is true either way.
        */
       if (nextCost) {
-        host.verdict.appendChild(banner('warn', '🧾 What it would actually cost you', [
-          el('p', { html: `Bidding <strong>${money(next)}</strong> costs <strong>${money(nextCost.total)}</strong> ` +
-            `all-in after the ${fees.premiumPct}% premium${fees.perItemFee ? `, ${money(fees.perItemFee)} handling` : ''} and ${fees.taxPct}% tax.` }),
-          el('p', { html: '<strong>No retail comparison and no recommended ceiling is shown</strong> for a ' +
-            'parts-only lot — decide what the spares are worth to you.' }),
-          feeBreakdown(fees, nextCost, { large }),
-          el('div', { class: `${NS}-links` }, retailLinks(product, best, stated)),
-        ]));
+        host.verdict.appendChild(summaryPanel({
+          tone: 'warn',
+          verdict: 'Parts-only lot — no ceiling recommended',
+          heroLabel: 'Final cost at next bid',
+          heroValue: money(nextCost.total),
+          heroNote: 'Value it as spares, not as a working unit.',
+          rows: [
+            { label: 'Next bid (hammer)', value: money(next) },
+            { label: 'Fees & tax', value: `+ ${money(nextCost.total - next)}`, note: feeNote },
+            { label: 'Final cost', value: money(nextCost.total), note: 'what you actually pay', accent: true },
+          ],
+          notes: ['No retail comparison is shown for a parts-only lot — decide what the spares are worth to you.'],
+          links,
+        }));
       }
-    } else if (retail && nextCost) {
-      const links = el('div', { class: `${NS}-links` }, retailLinks(product, best, stated));
+    } else if (retail && nextCost && nextDisc != null) {
+      const tone = nextDisc < CFG.warnBelowDiscountPct ? 'bad'
+        : nextDisc >= CFG.targetDiscountPct ? 'good' : 'warn';
+      const verdict = tone === 'bad' ? `Bad deal — only ${pct(nextDisc)} under retail`
+        : tone === 'good' ? `Good deal — ${pct(nextDisc)} under retail`
+        : `Marginal — ${pct(nextDisc)} under retail`;
 
-      if (nextDisc == null) {
-        /* nothing to say */
-      } else if (nextDisc < CFG.warnBelowDiscountPct) {
-        host.verdict.appendChild(banner('danger',
-          `🚨 BAD DEAL — only ${pct(nextDisc)} under retail`, [
-            el('p', { html:
-              `Bidding <strong>${money(next)}</strong> costs <strong>${money(nextCost.total)}</strong> all-in ` +
-              `(${fees.premiumPct}% buyer’s premium${fees.perItemFee ? ` + ${money(fees.perItemFee)} handling` : ''} + ${fees.taxPct}% tax).` }),
-            el('p', { html:
-              `A brand-new one is <strong>${money(retail)}</strong> at ${retailSource}. ` +
-              `That is only <strong>${pct(nextDisc)}</strong> off — below your ${CFG.warnBelowDiscountPct}% floor.` }),
-            el('p', { html: maxBid
-              ? `To hit your ${CFG.targetDiscountPct}%-off target you must not bid above <strong>${money(maxBid)}</strong>. ` +
-                `<strong>Stop bidding${next > maxBid ? ' — the current price is already past that' : ''}.</strong>`
-              : '' }),
-            feeBreakdown(fees, nextCost, { large }),
-            links,
-          ]));
-      } else if (nextDisc >= CFG.targetDiscountPct) {
-        host.verdict.appendChild(banner('good',
-          `✅ GOOD DEAL — ${pct(nextDisc)} under retail all-in`, [
-            el('p', { html:
-              `Bid <strong>${money(next)}</strong> → <strong>${money(nextCost.total)}</strong> out the door, ` +
-              `versus <strong>${money(retail)}</strong> new at ${retailSource}.` }),
-            el('p', { html: maxBid
-              ? `<span class="${NS}-maxbid">BID UP TO ${money(maxBid)}</span> and you still clear ${CFG.targetDiscountPct}% off. ` +
-                `Headroom: <strong>${money(Math.max(0, maxBid - next))}</strong>.`
-              : '' }),
-            feeBreakdown(fees, nextCost, { large }),
-            links,
-          ]));
-      } else {
-        host.verdict.appendChild(banner('warn',
-          `⚠️ Marginal — ${pct(nextDisc)} under retail all-in`, [
-            el('p', { html:
-              `Bidding ${money(next)} costs <strong>${money(nextCost.total)}</strong> all-in against ` +
-              `<strong>${money(retail)}</strong> new at ${retailSource}. That clears your ` +
-              `${CFG.warnBelowDiscountPct}% warning floor but misses your ${CFG.targetDiscountPct}% target.` }),
-            el('p', { html: maxBid ? `Target ceiling: <strong>${money(maxBid)}</strong>.` : '' }),
-            feeBreakdown(fees, nextCost, { large }),
-            links,
-          ]));
-      }
-    } else if (!retail && pending) {
-      host.verdict.appendChild(banner('info', 'Checking retail prices…', [
-        el('p', { html: `Looking up <code>${product.query}</code>. The fee breakdown below is already ` +
-          'accurate; the retail comparison will fill in when the lookup returns.' }),
-      ]));
+      const overCeiling = maxBid != null && next > maxBid;
+
+      // The hero is the decision. On a bad deal the decision is "stop", so the
+      // final cost you are about to pay is the number that belongs in 40px.
+      const hero = tone === 'bad'
+        ? { label: 'Final cost at next bid', value: money(nextCost.total) }
+        : { label: `Max bid for ${CFG.targetDiscountPct}% off`, value: money(maxBid) };
+
+      host.verdict.appendChild(summaryPanel({
+        tone,
+        verdict,
+        heroLabel: hero.label,
+        heroValue: hero.value,
+        heroNote: tone === 'bad'
+          ? (maxBid != null
+            ? `A brand-new one is <strong>${money(retail)}</strong>. Do not bid above <strong>${money(maxBid)}</strong>.`
+            : `A brand-new one is <strong>${money(retail)}</strong>.`)
+          : `Highest hammer whose final cost still lands ${CFG.targetDiscountPct}% under retail.`,
+        rows: [
+          { label: 'Retail (new)', value: money(retail), note: retailSource },
+          { label: 'Next bid (hammer)', value: money(next),
+            note: overCeiling ? '<strong>already past your ceiling</strong>' : 'current cost of entry' },
+          { label: 'Fees & tax', value: `+ ${money(nextCost.total - next)}`, note: feeNote },
+          { label: 'Final cost', value: money(nextCost.total),
+            note: `${pct(nextDisc)} under retail`, accent: true },
+          maxBid != null
+            ? { label: `Max bid (${CFG.targetDiscountPct}% off)`, value: money(maxBid),
+                note: overCeiling ? 'exceeded — stop bidding'
+                  : `headroom ${money(Math.max(0, maxBid - next))}` }
+            : null,
+          warnBidFor(retail, fees, large, increments) != null
+            ? { label: 'Walk away above', value: money(warnBidFor(retail, fees, large, increments)),
+                note: `below this you keep at least ${CFG.warnBelowDiscountPct}% off` }
+            : null,
+        ],
+        notes: [provisional, fees.notes.length ? fees.notes.join(' ') : null],
+        links,
+      }));
     } else if (!retail) {
-      host.verdict.appendChild(banner('info', 'ℹ️ No retail price found', [
-        el('p', { html: `Could not establish a retail price for <em>${product.name}</em> ` +
-          `(searched <code>${product.query}</code>). Bid guidance is unavailable — check manually.` }),
-        el('div', { class: `${NS}-links` }, retailLinks(product, null, null)),
-        errors.length ? el('div', { class: `${NS}-break`, text: `Provider errors: ${errors.join('; ')}` }) : null,
-      ]));
+      host.verdict.appendChild(summaryPanel({
+        tone: 'neutral',
+        verdict: pending ? 'Checking retail prices' : 'No retail price found',
+        heroLabel: nextCost ? 'Final cost at next bid' : 'Final cost',
+        heroValue: nextCost ? money(nextCost.total) : '—',
+        heroNote: pending
+          ? `Looking up <code>${product.query || product.name}</code>&hellip;`
+          : `Could not price <em>${product.name}</em>. The fee maths below is still accurate.`,
+        rows: [
+          next != null ? { label: 'Next bid (hammer)', value: money(next) } : null,
+          nextCost ? { label: 'Fees & tax', value: `+ ${money(nextCost.total - next)}`, note: feeNote } : null,
+          nextCost ? { label: 'Final cost', value: money(nextCost.total),
+            note: 'what you actually pay', accent: true } : null,
+        ],
+        notes: [
+          pending ? null : 'No bid ceiling can be computed without a retail price — check the links yourself.',
+          errors && errors.length ? `Lookup issues: ${errors.join('; ')}` : null,
+        ],
+        links,
+      }));
     }
 
     return true;
+  }
+
+  /** Hammer price at which the deal stops clearing the red-warning floor. */
+  function warnBidFor(retail, fees, large, increments) {
+    const h = maxHammerFor(retail, CFG.warnBelowDiscountPct, fees, { large });
+    return h != null ? floorToIncrement(h, increments) : null;
   }
 
   function retailLinks(product, best, stated) {
@@ -1414,7 +1665,7 @@
     }
   }
 
-  /** Insert a "Bid guidance" row with the fee-aware ceiling. */
+  /** Insert a "Bid guidance" row: the same numbers, compact, on a light row. */
   function injectBidRow(rows, d) {
     let td = document.getElementById(`${NS}-bid-cell`);
     if (!td) {
@@ -1431,62 +1682,64 @@
     }
     td.textContent = '';
 
+    const line = (label, value, note, accent) => el('tr', {}, [
+      el('th', { text: label }),
+      el('td', { class: accent ? `${NS}-mini-accent` : null, html: value }),
+      el('td', { class: `${NS}-mini-note`, html: note || '' }),
+    ]);
+
+    const feeNote = [
+      `${d.fees.premiumPct}% BP`,
+      d.fees.cardPct ? `${d.fees.cardPct}% card` : null,
+      d.fees.perItemFee ? `${money(d.fees.perItemFee)} handling` : null,
+      `${d.fees.taxPct}% tax`,
+    ].filter(Boolean).join(' + ');
+
     if (d.cond.partsOnly) {
       td.appendChild(el('div', { class: `${NS}-over`, html:
-        '<strong>💀 Parts-only lot — no ceiling recommended.</strong> A working unit’s retail price is not a ' +
-        'valid comparison. Value it as spares.' }));
+        '<strong>💀 Parts-only lot — no ceiling recommended.</strong> Value it as spares.' }));
       if (d.nextCost) {
-        td.appendChild(el('div', { class: `${NS}-sub`, html:
-          `Next bid <strong>${money(d.next)}</strong> → all-in <strong>${money(d.nextCost.total)}</strong>` }));
-        td.appendChild(feeBreakdown(d.fees, d.nextCost, { large: d.large }));
+        td.appendChild(el('table', { class: `${NS}-mini` }, [el('tbody', {}, [
+          line('Next bid', money(d.next)),
+          line('Fees & tax', `+ ${money(d.nextCost.total - d.next)}`, feeNote),
+          line('Final cost', money(d.nextCost.total), 'what you actually pay', true),
+        ])]));
       }
       appendFeeProvenance(td, d);
       return;
     }
 
-    if (d.maxBid == null) {
-      td.appendChild(el('div', { class: `${NS}-spin`, text: 'No retail price — cannot compute a ceiling.' }));
-    } else {
+    const body = [];
+    if (d.maxBid != null) {
       const over = d.next != null && d.next > d.maxBid;
-      td.appendChild(el('div', {}, [
-        el('span', {
-          class: `${NS}-maxbid ${over ? `${NS}-over` : ''}`,
-          text: `BID UP TO ${money(d.maxBid)}`,
-        }),
-        el('span', { class: `${NS}-sub`, text: ` for ${CFG.targetDiscountPct}% off retail all-in` }),
-        over ? el('span', { class: `${NS}-badge ${NS}-badge-bad`, text: 'price is past it' }) : null,
-      ]));
-
-      const warnHammer = maxHammerFor(d.retail, CFG.warnBelowDiscountPct, d.fees, { large: d.large });
-      const warnBid = warnHammer != null ? floorToIncrement(warnHammer, d.increments) : null;
-      if (warnBid) {
-        td.appendChild(el('div', { class: `${NS}-sub`, html:
-          `Hard walk-away (only ${CFG.warnBelowDiscountPct}% off): <strong>${money(warnBid)}</strong>` }));
-      }
-
-      // Be explicit that a ceiling built on the auctioneer's own claim is
-      // provisional, so the number is not mistaken for a verified one.
-      if (d.pending) {
-        td.appendChild(el('div', {}, [
-          el('span', { class: `${NS}-dot` }),
-          el('span', { class: `${NS}-spin`, text:
-            ' Provisional — based on the auctioneer’s stated retail. Verifying against live prices…' }),
-        ]));
+      body.push(line(`Max bid (${CFG.targetDiscountPct}% off)`, money(d.maxBid),
+        over ? '<strong>exceeded — stop bidding</strong>'
+             : `headroom ${money(Math.max(0, d.maxBid - (d.next || 0)))}`, true));
+      const warnBid = warnBidFor(d.retail, d.fees, d.large, d.increments);
+      if (warnBid != null) {
+        body.push(line('Walk away above', money(warnBid),
+          `only ${CFG.warnBelowDiscountPct}% off beyond this`));
       }
     }
-
     if (d.nextCost) {
-      const badge = d.nextDisc == null ? null
-        : d.nextDisc >= CFG.targetDiscountPct ? el('span', { class: `${NS}-badge ${NS}-badge-good`, text: `${pct(d.nextDisc)} off` })
-        : d.nextDisc < CFG.warnBelowDiscountPct ? el('span', { class: `${NS}-badge ${NS}-badge-bad`, text: `${pct(d.nextDisc)} off` })
-        : el('span', { class: `${NS}-badge ${NS}-badge-warn`, text: `${pct(d.nextDisc)} off` });
+      body.push(line('Next bid', money(d.next), 'current cost of entry'));
+      body.push(line('Fees & tax', `+ ${money(d.nextCost.total - d.next)}`, feeNote));
+      body.push(line('Final cost', money(d.nextCost.total),
+        d.nextDisc != null ? `${pct(d.nextDisc)} under retail` : 'what you actually pay',
+        d.maxBid == null));
+    }
+    if (!body.length) {
+      td.appendChild(el('div', { class: `${NS}-spin`, text: 'No retail price — cannot compute a ceiling.' }));
+    } else {
+      td.appendChild(el('table', { class: `${NS}-mini` }, [el('tbody', {}, body)]));
+    }
 
+    if (d.pending) {
       td.appendChild(el('div', {}, [
-        el('span', { class: `${NS}-sub`, html:
-          `Next bid <strong>${money(d.next)}</strong> → all-in <strong>${money(d.nextCost.total)}</strong>` }),
-        badge,
+        el('span', { class: `${NS}-dot` }),
+        el('span', { class: `${NS}-spin`, text:
+          ' Provisional — based on the auctioneer’s stated retail. Verifying against live prices…' }),
       ]));
-      td.appendChild(feeBreakdown(d.fees, d.nextCost, { large: d.large }));
     }
 
     appendFeeProvenance(td, d);

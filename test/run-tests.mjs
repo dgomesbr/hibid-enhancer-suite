@@ -325,6 +325,94 @@ check('named province fallback', H.detectTax('Located in British Columbia').pct,
 check('unknown location defaults to 13', H.detectTax('somewhere').pct, 13);
 
 // ===========================================================================
+console.log('\n9b. Regression: lot 317094078 (Encore Auctions, RODE NT-USB+)');
+// ===========================================================================
+/*
+ * A brand-new microphone was flagged PARTS-ONLY, priced with an 18% premium the
+ * terms never mentioned, and produced empty retail search links. Real page text
+ * below; four separate bugs.
+ */
+const RODE_LEAD = 'RODE NT-USB+ USB CONDENSER MICROPHONE';
+const RODE_DESC = `Est. Retail Price: 251.00
+Condition: BRAND NEW - OPEN BOX
+Model: NT-USB+
+In packaging? Yes
+Requires Assembly? No
+Is Item Functional? Yes
+Is Item Damaged? No
+Missing Major Parts? No`;
+
+// Bug 1 — "Is Item Damaged? No" matched a bare /damaged/ pattern, and
+// "Missing Major Parts?" contains the word "parts".
+const rodeCond = H.assessCondition([RODE_LEAD, RODE_DESC].join('\n'));
+falsy('brand-new lot is NOT parts-only', rodeCond.partsOnly);
+check('no parts-only reasons at all', rodeCond.partsReasons, []);
+truthy('reads as positive (functional = Yes / brand new)', rodeCond.positive);
+check('Condition field captured', rodeCond.condition, 'BRAND NEW - OPEN BOX');
+truthy('open box still raises a caution', rodeCond.cautions.includes('open box'));
+
+// The negated fields must not be readable as damage in isolation either.
+falsy('"Is Item Damaged? No" alone is not damage', H.assessCondition('Is Item Damaged? No').partsOnly);
+falsy('"Missing Major Parts? No" alone is not damage', H.assessCondition('Missing Major Parts? No').partsOnly);
+falsy('"Is Item Functional? Yes" alone is not damage', H.assessCondition('Is Item Functional? Yes').partsOnly);
+// ...but the affirmative answers still must fire.
+truthy('"Is Item Damaged? Yes" IS damage', H.assessCondition('Is Item Damaged? Yes').partsOnly);
+truthy('"Missing Major Parts? Yes" IS damage', H.assessCondition('Missing Major Parts? Yes').partsOnly);
+truthy('"Is Item Functional? No" IS damage', H.assessCondition('Is Item Functional? No').partsOnly);
+truthy('"Condition: FOR PARTS ONLY" IS damage',
+  H.assessCondition('Condition: FOR PARTS ONLY\nIs Item Damaged? No').partsOnly);
+
+// Bug 2 — the description is structured-only, so the product name and search
+// query came out empty and every retail link was unpopulated.
+const rode = H.extractProduct(RODE_LEAD, RODE_DESC);
+truthy('query is not empty', rode.query.length > 0);
+check('query uses brand + model', rode.query, 'RODE NT-USB+');
+check('model comes from the Model: field', rode.model, 'NT-USB+');
+check('brand', rode.brand, 'RODE');
+truthy('name falls back to the Lead', /RODE NT-USB\+/.test(rode.name));
+truthy('name is not the structured block', !/Est\. Retail Price/i.test(rode.name));
+
+// Bug 3 — the trailing "+" of NT-USB+ was stripped by token cleaning.
+truthy('trailing + survives in the query', rode.query.includes('+'));
+const plusLot = H.extractProduct('Google Pixel 9 Pro+ 256GB', '');
+truthy('another "+" model keeps its plus', plusLot.query.includes('+') || plusLot.model === null);
+
+// Bug 4 — "A 16% Buyer's Premium" with a curly apostrophe (U+2019) failed every
+// premium pattern and silently fell back to the 18% default, which moved every
+// ceiling on the page.
+const RODE_TERMS = `1. Fees & Charges
+All successful bids are subject to the following fees:
+A 16% Buyer’s Premium
+Harmonized Sales Tax (HST)
+A $1.50 handling fee per item
+A 2.4% credit card processing fee (only applicable when paying by credit card)
+Toronto, ON M5V 4A6`;
+const rodeFees = H.parseFees([RODE_TERMS]);
+check('curly-apostrophe premium parses as 16%', rodeFees.premiumPct, 16);
+truthy('premium was parsed, not defaulted', /parsed/.test(rodeFees.premiumSource));
+check('handling fee', rodeFees.perItemFee, 1.5);
+check('2.4% card fee', rodeFees.cardPct, 2.4);
+check('ON tax', rodeFees.taxPct, 13);
+
+// And the resulting bid maths, which is what the user actually sees.
+const rodeInc = H.parseIncrements(`Bid Amount\tBid Increment
+0.00 - 29.00\t1.00 CAD
+29.01 - 97.50\t2.50 CAD
+97.51 - 990.00\t10.00 CAD`);
+const rodeStated = H.extractStatedRetail(RODE_LEAD, RODE_DESC, '');
+check('stated retail 251.00', rodeStated.value, 251);
+// (251 x 0.5 / 1.13 - 1.50) / (1.16 x 1.024) = 92.24 — the 2.4% card fee counts.
+const rodeMax = H.maxHammerFor(251, 50, rodeFees, { large: false });
+check('50%-off ceiling on the corrected 16% premium', rodeMax, 92.24, 0.02);
+check('rounded down to the $2.50 increment tier', H.floorToIncrement(rodeMax, rodeInc), 90);
+check('bidding the ceiling lands exactly 50% under retail',
+  H.discountPct(H.allIn(rodeMax, rodeFees, { large: false }).total, 251), 50, 0.001);
+// The old 18% fallback would have produced a materially different ceiling.
+const wrongFees = Object.assign({}, rodeFees, { premiumPct: 18 });
+truthy('the 18% fallback really did change the answer',
+  Math.abs(H.maxHammerFor(251, 50, wrongFees, { large: false }) - rodeMax) > 1);
+
+// ===========================================================================
 console.log('\n10. Packaging / release metadata');
 // ===========================================================================
 /*

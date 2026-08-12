@@ -584,6 +584,26 @@ truthy('@version is present', !!scriptVersion);
 check('@version matches package.json', scriptVersion, pkg.version);
 truthy('@version is semver-ish', /^\d+\.\d+\.\d+$/.test(scriptVersion || ''));
 
+/*
+ * Lot photos must only ever be hidden behind the opt-in class. Hiding them
+ * unconditionally is what stopped them loading at all: a lazy image inside a
+ * display:none subtree never enters the viewport, so it never fetches. This is a
+ * static check because the visible result cannot be tested without a browser.
+ */
+const hideThumbRules = (src.match(/^\s*body\.\$\{NS\}[^\n]*app-thumbnail[^\n]*$/gm) || [])
+  .concat(src.match(/^\s*body\.\$\{NS\}[^\n]*lot-thumbnail-live-catalog[^\n]*$/gm) || []);
+truthy('there are rules governing lot thumbnails', hideThumbRules.length > 0);
+check('every thumbnail-hiding rule is gated on the opt-in class',
+  hideThumbRules.filter((r) => /display\s*:\s*none/.test(r) && !/-noimg/.test(r)), []);
+truthy('the opt-in hide rule exists', /\$\{NS\}-noimg[^\n]*app-thumbnail/.test(src) ||
+  src.includes('${NS}-noimg'));
+truthy('catalogHideImages defaults to off', /catalogHideImages:\s*false/.test(src));
+
+// The Show more toggle must stop propagation, not just preventDefault: the
+// description sits inside HiBid's own clickable link and an ancestor handler
+// routes the SPA away instead of expanding.
+truthy('Show more stops event propagation', /e\.stopPropagation\(\)/.test(src));
+
 truthy('@icon is inside the metadata block', /^\/\/ @icon\s+\S+/m.test(meta));
 truthy('@icon is a self-contained PNG data URI',
   /^\/\/ @icon\s+data:image\/png;base64,[A-Za-z0-9+/=]{500,}$/m.test(meta));

@@ -13,8 +13,8 @@ nobody.
 | Where | Example |
 |---|---|
 | `src/hibid-enhancer.user.js` → `// @version` | `0.4.0` |
-| `package.json` → `"version"` | `0.8.0` |
-| the git tag | `v0.8.0` |
+| `package.json` → `"version"` | `0.8.1` |
+| the git tag | `v0.8.1` |
 
 `npm test` fails if the first two disagree — that check exists precisely so a
 forgotten bump cannot become a silent non-release.
@@ -80,6 +80,7 @@ the parser fix so the suite keeps its teeth.
 
 | Version | Highlights |
 |---|---|
+| `v0.8.1` | Lot photos restored at 96px (hiding them stopped them ever loading). Show more now grows its container and no longer navigates away. |
 | `v0.8.0` | Lot detail page reordered around the decision; notices demoted; two new cards built from GraphQL. Accessory rejection no longer needs a noun. |
 | `v0.7.1` | Fixed pagination never re-running (it is a query-string change) and the tidy stylesheet leaking onto lot pages. Auction header box restructured. |
 | `v0.7.0` | Catalog decluttered: notices demoted to footer links, thumbnails/Watch removed, tiles 58% shorter. Fixed the deal dot being clipped out of sight. |

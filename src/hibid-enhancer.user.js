@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HiBid Enhancer Suite
 // @namespace    https://github.com/dgomesbr/hibid-enhancer-suite
-// @version      0.8.0
+// @version      0.8.1
 // @description  Retail price lookup, fee-aware bid ceilings, and loud condition warnings on HiBid lot pages.
 // @author       dgomesbr
 // @license      MIT
@@ -60,6 +60,7 @@
     autoLookup: true,      // look up retail automatically on page load
     catalogBatchSize: 6,   // lots priced concurrently on a catalog page (5-10)
     catalogTidy: true,     // strip page/tile noise on catalog pages
+    catalogHideImages: false, // true = no lot photos at all (they then never load)
     debug: false,
   };
 
@@ -1391,16 +1392,37 @@
        re-rendered away, and it costs no per-tile DOM writes. */
     body.${NS}-tidy app-notice{display:none !important;}
     body.${NS}-tidy a.share-link{display:none !important;}
-    body.${NS}-tidy app-lot-tile app-thumbnail,
-    body.${NS}-tidy .lot-tile app-thumbnail{display:none !important;}
-    /* Hiding the image alone leaves its reserved space behind: the thumbnail
-       column is a fixed 150px and the tile body has min-height:296px, so the
-       tile stayed 368px tall with a blank hole in it. Collapse the column and
-       release the floor, which is the whole point of removing the photo. */
+    /*
+     * Lot photos: shown, but compact.
+     *
+     * They were hidden outright in v0.7.0, which had a consequence worth
+     * recording: a lazy image inside a display:none subtree never enters the
+     * viewport, so it never loads. Hiding the container did not merely hide the
+     * photos, it guaranteed they could never appear. Now the column is kept and
+     * shrunk from 150px to 96px, which keeps most of the density win while you
+     * can still see what you are bidding on.
+     *
+     * Set catalogHideImages to true for the old no-photo behaviour.
+     */
     body.${NS}-tidy app-lot-tile .lot-thumbnail-live-catalog,
-    body.${NS}-tidy .lot-tile .lot-thumbnail-live-catalog{display:none !important;}
+    body.${NS}-tidy .lot-tile .lot-thumbnail-live-catalog{
+      height:auto !important;min-height:0 !important;flex:0 0 auto;}
+    body.${NS}-tidy app-lot-tile .img-thumbnail-container,
+    body.${NS}-tidy .lot-tile .img-thumbnail-container{
+      height:96px !important;min-height:0 !important;}
+    body.${NS}-tidy app-lot-tile .img-thumbnail-container img,
+    body.${NS}-tidy .lot-tile .img-thumbnail-container img{
+      max-height:96px !important;width:auto !important;object-fit:contain;}
+
+    /* Releasing the tile's 296px floor is what actually shortens it. */
     body.${NS}-tidy app-lot-tile .lot-tile-content,
     body.${NS}-tidy .lot-tile .lot-tile-content{min-height:0 !important;height:auto !important;}
+
+    /* Opt-in: hide photos entirely (also stops them downloading). */
+    body.${NS}-tidy.${NS}-noimg app-lot-tile app-thumbnail,
+    body.${NS}-tidy.${NS}-noimg .lot-tile app-thumbnail,
+    body.${NS}-tidy.${NS}-noimg app-lot-tile .lot-thumbnail-live-catalog,
+    body.${NS}-tidy.${NS}-noimg .lot-tile .lot-thumbnail-live-catalog{display:none !important;}
     body.${NS}-tidy app-lot-tile .watch-container,
     body.${NS}-tidy .lot-tile .watch-container{display:none !important;}
 
@@ -3531,6 +3553,7 @@
 
       // One class switch does all the static hiding; see the stylesheet.
       document.body.classList.add(`${NS}-tidy`);
+      document.body.classList.toggle(`${NS}-noimg`, !!CFG.catalogHideImages);
 
       // These three genuinely need JS: moving nodes, copying notice text out
       // before it is hidden, and identifying the icon-only print control.
@@ -3579,11 +3602,57 @@
       desc.dataset[`${NS}Clamped`] = '1';
       desc.classList.add(`${NS}-clamp`);
 
+      /*
+       * Expanding the text is not enough on its own. HiBid's own wrappers
+       * (.read-more-outer.expandable and the column around it) carry their own
+       * height and overflow, so releasing only the inner element rendered the
+       * extra text inside a still-clipped box — visibly cut off mid-sentence.
+       *
+       * The ancestors up to the row are therefore released too, and their
+       * original inline values are remembered so collapsing restores them rather
+       * than leaving the page permanently altered.
+       */
+      const chain = [];
+      for (let n = desc.parentElement, i = 0; n && n !== row && i < 6; n = n.parentElement, i++) {
+        chain.push(n);
+      }
+
+      const release = (on) => {
+        for (const n of chain) {
+          if (on) {
+            if (!(`${NS}Saved` in n.dataset)) {
+              n.dataset[`${NS}Saved`] = JSON.stringify({
+                mh: n.style.maxHeight, h: n.style.height, ov: n.style.overflow,
+              });
+            }
+            n.style.maxHeight = 'none';
+            n.style.height = 'auto';
+            n.style.overflow = 'visible';
+          } else if (`${NS}Saved` in n.dataset) {
+            let prev = {};
+            try { prev = JSON.parse(n.dataset[`${NS}Saved`]); } catch (_) { prev = {}; }
+            n.style.maxHeight = prev.mh || '';
+            n.style.height = prev.h || '';
+            n.style.overflow = prev.ov || '';
+            delete n.dataset[`${NS}Saved`];
+          }
+        }
+      };
+
       const toggle = el('button', {
         class: `${NS}-more`, type: 'button', text: 'Show more',
         onclick: (e) => {
+          /*
+           * stopPropagation as well as preventDefault: the description sits
+           * inside HiBid's own clickable lot/auction link, and an ancestor click
+           * handler routes the SPA elsewhere. preventDefault alone stops the
+           * anchor's default but not a JS handler, so the page navigated away
+           * instead of expanding.
+           */
           e.preventDefault();
+          e.stopPropagation();
           const open = desc.classList.toggle(`${NS}-expanded`);
+          release(open);
           toggle.textContent = open ? 'Show less' : 'Show more';
         },
       });
@@ -3654,11 +3723,9 @@
       if (!CFG.catalogTidy) return;
 
       /*
-       * The thumbnail and Watch control are hidden by the stylesheet, which also
-       * stops the images downloading: HiBid already sets loading="lazy" on 101 of
-       * 104 images, and a lazy image inside a display:none subtree never enters
-       * the viewport, so the fetch never fires. Measured: 0 lot images requested
-       * after enhancement, against ~100 without it.
+       * The Watch control is hidden by the stylesheet. Lot photos are kept but
+       * shrunk to 96px — hiding them also stopped them ever loading, since a
+       * lazy image inside a display:none subtree never enters the viewport.
        */
 
       // "Lot 9712" -> "9712". Only the text needs JS.
@@ -3732,6 +3799,7 @@
      */
     if (kind !== 'catalog' && kind !== 'search') {
       document.body.classList.remove(`${NS}-tidy`);
+      document.body.classList.remove(`${NS}-noimg`);
     }
     if (State.running) return;
     State.running = true;

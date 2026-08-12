@@ -471,7 +471,7 @@ Set `catalogTidy: false` to switch it all off.
 | Removed | Why |
 |---|---|
 | Bidding Notice, Auction Notice | Read once, cost a screenful every visit. Both become links in a footer block with the full text one click away. |
-| Lot thumbnails | You are comparing prices, not photos. Also the largest network saving on the page. |
+| ~~Lot thumbnails~~ | **Kept, shrunk to 96 px.** Hiding them outright had a consequence worth recording: a lazy image inside a `display:none` subtree never enters the viewport, so it never loads — hiding the container did not merely hide the photos, it guaranteed they could never appear. Set `catalogHideImages: true` for the old behaviour. |
 | Watch control | 100 copies of a control you use on one lot. |
 | Share and Print | Page furniture. Note the per-lot bid buttons also carry the class `print`, so matching that class alone would have removed the bid button from all 100 tiles. |
 | The word "Lot" before every number | `Lot 9712` → `9712`. |
@@ -483,20 +483,17 @@ status badges, where they belong.
 
 Measured on the 100-lot page:
 
-| | before | after |
-|---|---|---|
-| Tile height | 368 px | **155 px** (−58%) |
-| Page height | 10,516 px | **5,009 px** (−52%) |
-| Lot images requested | ~100 | **0** |
+| | stock | v0.7.0 (no photos) | now |
+|---|---|---|---|
+| Tile height | 368 px | 155 px | **~200 px** |
+| Photos | 150 px | none | **96 px, lazy** |
 
-Hiding the thumbnail alone was not enough: its column is a fixed 150 px and the
-tile body has `min-height: 296px`, so the tile stayed 368 px tall with a blank
-hole in it. The column is collapsed and the floor released as well.
+Releasing the tile's `min-height: 296px` floor is what actually shortens it — the
+photo column alone was never the whole 213 px.
 
-The zero image requests are a consequence rather than a trick — HiBid already
-sets `loading="lazy"` on 101 of 104 images, and a lazy image inside a
-`display:none` subtree never enters the viewport, so the fetch never fires. No
-separate lazy-loading patch is needed.
+No separate lazy-loading patch is needed: HiBid already sets `loading="lazy"` on
+101 of 104 images, so they load as you scroll. What *broke* loading was hiding
+their container, since a lazy image that never enters the viewport never fetches.
 
 ### Auction header box
 
@@ -509,6 +506,9 @@ mismatched controls — 336 px before you reached a single lot.
   the only picture on it and earns nothing.
 - The blurb is clamped to three lines with a **Show more** toggle. HiBid ships an
   `app-read-more` component but it renders fully expanded here (231 px).
+  Expanding releases the height and overflow of HiBid's own wrappers too, and
+  restores their original inline values on collapse — releasing only the inner
+  element left the extra text inside a still-clipped box, cut off mid-sentence.
 - The right-hand controls are equalised to one uniform pill each, 247 × 40 px.
 
 That last one needed care. The controls are not siblings: `app-auction-status` is

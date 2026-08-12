@@ -254,3 +254,6 @@ worse than three rows. Checked at 420px: single column throughout, no horizontal
 overflow.
 
 ![Redesigned lot page at 420px](screenshot-bluf-mobile.png)
+
+> The "before" screenshot above is deliberately kept at the pre-redesign build —
+> it is the comparison, so it is not refreshed with the others.

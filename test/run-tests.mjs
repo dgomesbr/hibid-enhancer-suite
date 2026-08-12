@@ -875,5 +875,33 @@ check('text with no count is left alone', H.bidCountLabel('Bid History'), null);
 check('no count text at all', H.bidCountLabel(undefined), null);
 
 // ===========================================================================
+console.log('\n14. Retail cache identity');
+// ===========================================================================
+
+/*
+ * The catalog sweep asks "is this lot already priced?" before deciding whether it
+ * needs the network, and it must ask with exactly the key lookupRetail would use.
+ * If the two ever disagree every lot looks uncached, the sweep paces all of them,
+ * and the six seconds this bought go straight back.
+ */
+const prodA = { query: 'Sony WF-1000XM5', statedRetail: 328 };
+const keyA = H.retailCacheKey(prodA);
+truthy('the key names the query', keyA.indexOf('retail:sony wf-1000xm5') === 0);
+check('the query is lower-cased, so case cannot split the cache',
+  H.retailCacheKey({ query: 'SONY WF-1000XM5', statedRetail: 328 }), keyA);
+// The price floor is part of the identity on purpose: the same query filters
+// differently under a different stated retail, so the results are not the same.
+truthy('a different stated retail is a different key',
+  H.retailCacheKey({ query: 'Sony WF-1000XM5', statedRetail: 40 }) !== keyA);
+check('no stated retail still yields a stable key',
+  H.retailCacheKey({ query: 'widget' }), 'retail:widget|f0');
+
+// cachedRetail must never invent an answer, and never throw on a lot whose query
+// the extractor refused to build.
+check('a product with no query is never "cached"', H.cachedRetail({ query: '' }), null);
+check('no product at all', H.cachedRetail(null), null);
+check('an unknown query misses', H.cachedRetail({ query: 'nothing ever cached this' }), null);
+
+// ===========================================================================
 console.log(`\n${pass + fail} assertions: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

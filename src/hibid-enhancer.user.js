@@ -1230,11 +1230,31 @@
    */
   const inflight = new Map();
 
+  /**
+   * The cache key for a product. The price floor is part of the identity of a
+   * result: the same query under a different stated retail can legitimately
+   * filter differently.
+   */
+  function retailCacheKey(product) {
+    return `retail:${product.query.toLowerCase()}|f${Math.round(priceFloor(product))}`;
+  }
+
+  /**
+   * The cached answer for a product, or null — without touching the network.
+   *
+   * Lets a caller find out whether a lookup is free before deciding how to
+   * schedule it. The catalog sweep uses this to separate the lots it already
+   * knows about from the ones it has to fetch, which is worth about six seconds
+   * on a page whose quotes are all cached.
+   */
+  function cachedRetail(product) {
+    if (!product || !product.query) return null;
+    return Cache.get(retailCacheKey(product));
+  }
+
   /** Run the enabled providers and return every quote we managed to get. */
   async function lookupRetail(product) {
-    // The price floor is part of the identity of a result: the same query under
-    // a different stated retail can legitimately filter differently.
-    const cacheKey = `retail:${product.query.toLowerCase()}|f${Math.round(priceFloor(product))}`;
+    const cacheKey = retailCacheKey(product);
     const cached = Cache.get(cacheKey);
     if (cached) { log('cache hit', cacheKey); return cached; }
     if (inflight.has(cacheKey)) { log('joined in-flight', cacheKey); return inflight.get(cacheKey); }
@@ -3838,7 +3858,26 @@
         ]);
         const termsText = terms.text || '';
 
-        const fees = parseFees([termsText, (document.body.innerText || '').slice(0, 4000)]);
+        /*
+         * The page text is read only if the auction's own text did not name a
+         * province, because reading it is expensive in a way that is easy to miss.
+         *
+         * `document.body.innerText` forces a full layout and text-extraction of
+         * the render tree. On this 100-tile page that measured 9ms with layout
+         * already clean and 593ms with it dirty — and Tidy.page() has just added
+         * a body class, so it is always dirty here. It was the single longest
+         * blocking task in the whole catalog sweep.
+         *
+         * auctionTerms already includes shippingAndPickupInfo, which carries the
+         * pickup address, so the province is usually known without it and the
+         * expensive read never happens. When it is genuinely needed the inputs
+         * are exactly what they were before.
+         */
+        let fees = parseFees([termsText]);
+        if (!fees.province) {
+          Perf.count('catalog: paid for body.innerText to find a province');
+          fees = parseFees([termsText, (document.body.innerText || '').slice(0, 4000)]);
+        }
         /*
          * If the terms could not be fetched, every final price on the page comes
          * from the fallback premium. On a measured run that was $1.33 instead of
@@ -3863,7 +3902,19 @@
         // ---- pass 1: final price on every tile, zero network per lot ------
         const work = [];
         const costByBucket = new Map();
-        for (const tile of tiles) {
+        /*
+         * Deliberately not yielded.
+         *
+         * Breaking this loop up looks like the obvious way to stop it blocking,
+         * and measurement said otherwise: yielding every 10 tiles turned one
+         * long task into six of 262-427ms, because each yield lets the browser
+         * run a full style and layout pass over all 100 tiles before the loop
+         * resumes. The arithmetic here is 14ms of CPU for all 100 lots; the cost
+         * is the layout the DOM writes provoke, and interleaving pays it
+         * repeatedly instead of once.
+         */
+        for (let t = 0; t < tiles.length; t++) {
+          const tile = tiles[t];
           const lot = byId.get(tile.id) || {};
           const lead = lot.lead || tile.title || '';
           const description = lot.description || '';
@@ -3894,36 +3945,66 @@
           work.push({ tile, product, stated, cond, cost, next, large });
         }
 
-        // ---- pass 2: retail lookups, in small batches --------------------
-        const size = Math.max(1, Math.min(20, CFG.catalogBatchSize || 6));
+        // ---- pass 2: retail lookups --------------------------------------
         let priced = 0;
-        for (let i = 0; i < work.length; i += size) {
-          if (Catalog._done !== key) return true;  // navigated away mid-sweep
-          await Promise.all(work.slice(i, i + size).map(async (w) => {
-            let best = null;
-            if (!w.cond.partsOnly && w.product.query) {
-              try {
-                best = pickBest((await lookupRetail(w.product)).quotes);
-              } catch (e) { /* fall back to the auctioneer's own figure */ }
-            }
-            const retail = best ? best.price : (w.stated ? w.stated.value : null);
-            const ratio = (retail && w.cost) ? w.cost.total / retail : null;
-            if (ratio != null) priced++;
-            Catalog.setIndicator(w.tile, {
-              ratio,
-              disc: ratio == null ? null : (1 - ratio) * 100,
-              cost: w.cost,
-              retail,
-              source: best ? best.provider : (w.stated ? 'auctioneer’s figure' : null),
-              partsOnly: w.cond.partsOnly,
-              damaged: w.cond.damaged,
-              feesEstimated,
-            });
-          }));
-          // Be a polite client between batches.
-          if (i + size < work.length) await new Promise((r) => setTimeout(r, 350));
+        const paint = (w, best) => {
+          const retail = best ? best.price : (w.stated ? w.stated.value : null);
+          const ratio = (retail && w.cost) ? w.cost.total / retail : null;
+          if (ratio != null) priced++;
+          Catalog.setIndicator(w.tile, {
+            ratio,
+            disc: ratio == null ? null : (1 - ratio) * 100,
+            cost: w.cost,
+            retail,
+            source: best ? best.provider : (w.stated ? 'auctioneer’s figure' : null),
+            partsOnly: w.cond.partsOnly,
+            damaged: w.cond.damaged,
+            feesEstimated,
+          });
+        };
+
+        /*
+         * Phase A — everything that needs no network at all.
+         *
+         * A parts-only lot is never looked up, a lot with no usable query cannot
+         * be, and a cached quote is already in hand. Those used to be fed through
+         * the batch loop anyway, taking a slot in a batch of six and then waiting
+         * out the 350ms politeness delay before the next batch — so a page whose
+         * quotes were all cached spent about 6.6 seconds asleep and issued no
+         * requests at all. Measured on a 100-lot page: 6.59s of the 6.6s sweep
+         * was that sleep.
+         *
+         * Yields every 25 tiles so a hundred cache hits cannot become one long
+         * task that janks the page while the user is trying to scroll.
+         */
+        const misses = [];
+        let free = 0;
+        for (let i = 0; i < work.length; i++) {
+          if (Catalog._done !== key) return true;      // navigated away mid-sweep
+          const w = work[i];
+          if (w.cond.partsOnly || !w.product.query) { paint(w, null); free++; continue; }
+          const hit = cachedRetail(w.product);
+          if (hit) { paint(w, pickBest(hit.quotes)); free++; continue; }
+          misses.push(w);
+          if (i % 25 === 24) await new Promise((r) => setTimeout(r, 0));
         }
-        log(`catalog: ${priced}/${work.length} lots priced`);
+
+        // ---- Phase B: the ones that actually have to be fetched, paced ----
+        const size = Math.max(1, Math.min(20, CFG.catalogBatchSize || 6));
+        for (let i = 0; i < misses.length; i += size) {
+          if (Catalog._done !== key) return true;
+          await Promise.all(misses.slice(i, i + size).map(async (w) => {
+            let best = null;
+            try {
+              best = pickBest((await lookupRetail(w.product)).quotes);
+            } catch (e) { /* fall back to the auctioneer's own figure */ }
+            paint(w, best);
+          }));
+          // Be a polite client between batches that actually hit the network.
+          if (i + size < misses.length) await new Promise((r) => setTimeout(r, 350));
+        }
+        log(`catalog: ${priced}/${work.length} lots priced ` +
+          `(${free} needed no network, ${misses.length} fetched)`);
         return true;
       } finally {
         Loader.hide();
@@ -4355,7 +4436,7 @@
       Providers, pickBest, lookupRetail,
       parseLotId, parseAuctionId, splitNotice, conditionTone, conditionChips,
       infoFacts, fmtDateTime, formatAddress, Perf, correctFees,
-      maxBidLabel, bidCountLabel,
+      maxBidLabel, bidCountLabel, retailCacheKey, cachedRetail,
       setHttp: (fn) => { HTTP = fn || gmHttp; },
       setConfig: (patch) => { CFG = Object.assign({}, CFG, patch); },
     };

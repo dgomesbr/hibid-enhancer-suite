@@ -525,7 +525,7 @@ never sent anywhere except `api.keepa.com`.
 ## Tests
 
 ```bash
-node test/run-tests.mjs            # 277 assertions, no dependencies
+node test/run-tests.mjs            # 284 assertions, no dependencies
 
 npm install --no-save linkedom     # provides DOMParser for Node
 node test/run-provider-tests.mjs   # 33 assertions against real captured responses
@@ -656,6 +656,91 @@ If the auction's terms cannot be read, every final price would silently come fro
 the fallback premium — on one run that was $1.33 instead of $3.04, a 2.3× error
 with nothing on screen to say so. The bracketed figure now carries a dashed
 underline and a tooltip in that case, and the deal dot's tooltip says so too.
+
+### What the sweep actually spent its time on
+
+Two things dominated, and neither was the arithmetic. Both were found by measuring
+rather than reading, and a third fix was measured, tried, and thrown away.
+
+**Pacing work that never touched the network — 6.59s of a 6.6s sweep.**
+
+The politeness delay between batches exists to avoid hammering Amazon and Best Buy,
+which is right. But every lot went through the same batch loop whether or not it
+needed a request: a parts-only lot is never looked up, a lot with no usable query
+cannot be, and a cached quote is already in hand. On a 100-lot page with every quote
+cached, the sweep issued **zero** retail requests and still took 6.6 seconds, 6.59s
+of which was `setTimeout` doing nothing.
+
+The sweep now runs in two phases — everything free resolves immediately, then only
+the lots that genuinely need fetching are batched and paced. Same page, same warm
+cache:
+
+| | before | after |
+|---|---|---|
+| Span of all 100 cache reads | 6,593ms | **17ms** |
+| Pacing sleeps taken | 16 | **0** |
+| Every dot resolved by | ~8.0s | **1.0–2.4s** |
+| Retail requests issued | 0 | 0 |
+
+A cold page is still network-bound and still paced exactly as before — that is what
+the delay is for. What changed is that a page it cannot help no longer pays it.
+
+**`document.body.innerText` — 593ms in one blocking task.**
+
+The fee parser was given the page's text as a fallback source for the province,
+which sets the tax rate. Reading `document.body.innerText` forces a full layout and
+text extraction of the render tree:
+
+| | |
+|---|---|
+| `document.body.innerText`, layout already clean | 9ms |
+| `document.body.innerText`, layout dirty | **593ms** |
+| `document.body.textContent` (forces no layout) | 2ms |
+
+Layout is always dirty at that moment, because `Tidy.page()` has just added a body
+class. This was the longest single blocking task in the sweep. The page text is now
+read **only if the auction's own text did not name a province** — and since
+`auctionTerms` already includes `shippingAndPickupInfo`, which carries the pickup
+address, it usually does. When the fallback is genuinely needed the inputs are
+identical to before.
+
+**Yielding inside the tile loop — measured, and reverted.**
+
+Breaking the 100-tile loop up looked like the obvious way to stop it blocking.
+Measured, it made things worse: yielding every 10 tiles turned one long task into
+**six of 262–427ms and raised total blocked time from ~1,533ms to 2,343ms**, because
+each yield lets the browser run a full style and layout pass over all 100 tiles
+before the loop resumes. The loop is deliberately left unyielded, with a comment
+saying so, because it is the kind of change someone will try again.
+
+For scale, the per-lot arithmetic in that loop is **14–16ms of CPU for all 100
+lots** — `assessCondition` ~9ms, `extractProduct` ~7ms, `extractStatedRetail`
+~1.3ms, `isLargeItem` and `allIn` ~0.15ms each. The cost was never the arithmetic;
+it is the layout the DOM writes provoke.
+
+Those figures are reproducible rather than anecdotal:
+
+```bash
+node tools/bench-catalog.mjs            # 100 real lots from auction 764522
+node tools/bench-catalog.mjs 766625     # or any auction id
+```
+
+It pulls the lots once via GraphQL into a gitignored fixture, then runs offline
+against the shipped `__hesInternals`, and also prints how much of the page is even
+eligible for a lookup — on auction 764522, 3 lots are parts-only and never looked
+up, and 100 lots reduce to 94 distinct cache keys, which is why deduplicating
+queries further is not worth doing.
+
+**Still open.** The longest remaining block is 537–846ms, in the tile loop's DOM
+writes. Reducing it means auditing `Tidy.tile`, `setFinal` and `setIndicator` for
+reads interleaved with writes, so the browser is not forced to re-layout mid-loop.
+The measurement is noisy on a live page — 537ms and 846ms on two consecutive runs of
+the same page — so that wants a controlled fixture before anyone tunes it.
+
+Two **dead ends**, recorded so they are not re-investigated: the document-wide
+`MutationObserver` fires only **3 times** on a catalog page, and injecting the
+stylesheet costs **0ms** (an earlier 280ms reading was an artifact of the
+measurement forcing a style recalc the browser would have done anyway).
 
 ### Known limitation
 

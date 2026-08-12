@@ -241,8 +241,13 @@ and in that case the table is the only place the ceiling appears, so it stays. T
 table also remains in full on the fallback path that uses HiBid's own table.
 
 For comparison, the same lot before this consolidation:
-[docs/screenshot-bluf-before.png](screenshot-bluf-before.png), and the page
-as a whole after: [docs/screenshot-bluf-top.png](screenshot-bluf-top.png).
+[screenshot-bluf-before.png](screenshot-bluf-before.png), and the page as a whole
+after: [screenshot-bluf-top.png](screenshot-bluf-top.png).
+
+The same layout on `hibid.com` rather than an auctioneer subdomain, which uses
+slightly different markup: [screenshot-bluf-hibid-top.png](screenshot-bluf-hibid-top.png).
+Both sites are checked on every change, because a selector that only holds on one
+of them is a selector that will break.
 
 ### Narrow screens
 

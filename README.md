@@ -25,7 +25,7 @@ what you are about to pay instead of a ceiling:
 |---|---|
 | **Product identification** | Extracts the real product name from the lot description, stripping the `Retail $328.00 \|` prefix, the `****` separator and the auctioneer's `Notes:` block. Builds a tight search query (`Sony WF-1000XM5`), keeping capacity where it moves price (`CORSAIR Vengeance DDR5 32GB`). |
 | **Live retail price** | A **Retail (live)** block in the Lot details card, with the price, the matched product title, a condition badge, and deep links — including a CamelCamelCamel price-history link for the exact ASIN. Falls back to a row beneath the auctioneer's **Estimate** row if the card cannot be built. |
-| **Fee-aware bid ceiling** | A **Bid guidance** block shows `BID UP TO $X` — the highest hammer price whose all-in cost still clears your target discount — rounded down to a bid the site will actually accept. |
+| **Fee-aware bid ceiling** | The highest hammer price whose all-in cost still clears your target discount, rounded down to a bid the site will actually accept. Shown in the summary panel, with the fee provenance in the Lot details card and a full **Bid guidance** table on the fallback path. |
 | **Reordered page** | Lot details, watch and bid above the photos; location, dates, auctioneer and share/catalog buttons below them; the six accordions in a grid; the notices demoted to links at the foot. See [Lot detail page layout](#lot-detail-page-layout). |
 | **Summary panel** | One dark panel at the top of the page: the decision in 40px type, then a table of retail / next bid / fees & tax / **final cost** / max bid / walk-away. Styled from HiBid's own palette (brand blue `#266296`, near-black, their orange `#e65100`); money that leaves your pocket is orange. |
 | **Red bad-deal panel** | If the next required bid lands less than 25% under retail the panel turns red and the hero number becomes the final cost you are about to pay, not a ceiling. |
@@ -121,7 +121,7 @@ reorders it around the question you came to answer.
 |---|---|---|
 | 1 | Summary panel | The decision, unchanged: hero number, cost table, condition banners. |
 | 2 | Lot title | HiBid's own `<h1>`. |
-| 3 | **Lot details** card | Condition chips, the facts grid, **Retail (live)**, **Bid guidance**, and the description folded away. |
+| 3 | **Lot details** card | Condition chips, the facts grid, **Retail (live)**, the fee provenance, and the description folded away. |
 | 4 | Watch / bid strip | HiBid's own watch control, high bid, time remaining and Bid button, on one row. |
 | 5 | Photos | The gallery, capped at 900px so a full-width column does not make it 1200px tall. |
 | 6 | **Auction & auctioneer** card | Location, dates, auctioneer, contact, and catalog / auctioneer / map / e-mail / share as buttons. |
@@ -220,19 +220,30 @@ Measured at 1280px on both reference lots, released version versus this one:
 | Collapsible panel stack | 330px → **90px** | 330px → **90px** |
 | Information accordion | 694px → 0 (hidden) | 686px → 0 (hidden) |
 | Notice cards | 251px → 0 (links) | 230px → 0 (links) |
-| `app-lot-details` total | 1720px → **2220px** | 1699px → **2257px** |
+| `app-lot-details` total | 1720px → **2017px** | 1699px → **2119px** |
 | DOM nodes | 650 → 743 | 996 → 1083 |
 
 The accordion goal is met decisively and ~1,180px of always-on boilerplate leaves
-the flow, but **the content region is ~30% taller overall**, because the two new
-cards surface more than they replace: the auction and auctioneer details were
+the flow, but **the content region is still ~20% taller overall**, because the two
+new cards surface more than they replace: the auction and auctioneer details were
 previously only inside a collapsed accordion, and the retail and bid figures now
 sit above the photos instead of below them. Everything added is one screen from
 the top rather than three.
 
-The largest remaining duplication is deliberate: the **Bid guidance** block
-repeats the summary panel's table almost row for row. Both are kept because both
-are documented features; folding the block would reclaim about 115px.
+### One set of numbers, not two
+
+The **Bid guidance** block used to repeat the summary panel's table almost row for
+row — max bid, walk away, next bid, fees & tax, final cost — a few hundred pixels
+below it. Two identical tables on one screen invite the reader to hunt for a
+difference that is not there, so inside the card the table is suppressed and the
+block keeps only what the panel does not carry: the fee provenance. It is
+relabelled **Fees** when that happens. Worth 203px on the encore lot and 138px on
+hibid.com.
+
+The condition is the *absence of a next-bid amount*, not simply "is there a card":
+`renderQuotes` draws no panel at all when there is no bid to cost out, and in that
+case the table is the only place the ceiling appears, so it stays. The table also
+remains in full on the fallback path where HiBid's own information table is used.
 
 For comparison, the same lot before the redesign:
 [docs/screenshot-detail-before.png](docs/screenshot-detail-before.png). The other
@@ -340,16 +351,39 @@ page's own Catalog link, the auction query no longer waits for the lot query:
 by the time the lot query returned. Worst case the enrichment went from
 ~3.4s of chained round trips to ~1.7s.
 
-### Not changed, and why
+### Fees are re-derived from the auction's own text
 
-The DOM copy of a notice is truncated at ~400 characters, so a fee stated only
-in the notice text — Encore's 2.4% card processing fee sits about 600 characters
-in — is invisible to `parseFees` today. The full text is available from
-`auction(id) { auctionNotice }`, which pass 3 already fetches. Feeding it to the
-fee parser would be a correctness improvement, and it was deliberately left out:
-it changes every ceiling on the page, and it would change them *after* the
-summary panel had already rendered. It belongs in a change that owns the money
-path, not in a layout change.
+The DOM is an unreliable source for fees. A notice is rendered as roughly its
+first 400 characters followed by a *Show More* anchor, so anything stated further
+in is not on the page at all. On auction 764522 the auction notice is 725
+characters and the credit-card surcharge is mentioned at character 441 — inside
+the part that is missing.
+
+So pass 3 parses the fee stack a second time, with `GQL.auctionTerms` appended to
+the same DOM sources — the identical helper the catalog uses, so both pages derive
+fees from one definition of "the auction's fee text". It runs alongside the other
+pass-3 queries, so the extra request costs no wall-clock time. Two things follow:
+
+- If a number actually moves, the summary panel and the fee block re-render with
+  whatever quotes were last on screen, so a retail price that has already landed
+  is not thrown away, and the fee provenance gains a line naming what changed and
+  why. If nothing moves, nothing re-renders.
+- `buyerPremiumRate` is used as a last resort when the text yielded no premium at
+  all. It is this auction's own number, so it beats the blind 18% fallback — but
+  it is checked *after* the text, because it reads 1.0 (0%) on auctions whose
+  terms plainly say 16%.
+
+This deliberately moves money after the page has settled. The alternative is
+leaving a final cost on screen that is knowably wrong because the page truncated
+the sentence it was parsed from.
+
+Honest scope: on **both** reference auctions the correction currently changes
+nothing, because each states its card fee in the Terms and Conditions panel too,
+and that panel is not truncated. Measured on auction 764522, a fee visible only in
+the notice would have been worth $1.70 on a $100 hammer ($134.23 versus $135.92).
+The correction is a safety net for auctions that state a fee in one place only,
+plus the `buyerPremiumRate` improvement above, which does change the answer
+whenever an auctioneer never writes the premium in prose.
 
 ## Retail price sources
 
@@ -426,10 +460,10 @@ never sent anywhere except `api.keepa.com`.
 ## Tests
 
 ```bash
-node test/run-tests.mjs            # 220 assertions, no dependencies
+node test/run-tests.mjs            # 252 assertions, no dependencies
 
 npm install --no-save linkedom     # provides DOMParser for Node
-node test/run-provider-tests.mjs   # 29 assertions against real captured responses
+node test/run-provider-tests.mjs   # 33 assertions against real captured responses
 ```
 
 `test/fixtures/` holds trimmed but otherwise untouched real responses from

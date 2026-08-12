@@ -758,5 +758,78 @@ check('an empty record has no address', H.formatAddress({}), null);
 check('no record at all', H.formatAddress(null), null);
 
 // ===========================================================================
+console.log('\n12. Correcting fees from the auction’s own text');
+// ===========================================================================
+
+/*
+ * The bug this exists for: HiBid renders roughly the first 400 characters of a
+ * notice and then a "Show More" anchor, so a fee stated further in is absent
+ * from the DOM entirely. Encore's 2.4% credit-card surcharge sits about 600
+ * characters into the auction notice, so every final cost on the lot was
+ * under-stated by 2.4% of the invoice with nothing on screen to say so.
+ */
+const TRUNCATED_NOTICE =
+  'Auction Notice: All shipping is handled exclusively through pkgPlace. Even if you ' +
+  'select "Request Shipping" during registration, you must contact pkgPlace directly ' +
+  'to initiate your shipment. Shipping requests must be submitted within 3 days ...';
+
+const FULL_AUCTION_TEXT =
+  'A 16% Buyer’s Premium applies to all purchases. $1.50 handling fee per item.\n\n' +
+  TRUNCATED_NOTICE.replace('within 3 days ...', 'within 3 days of the auction closing. ') +
+  'Please note: we do not automatically charge the card on file. If you choose to pay ' +
+  'by credit card, a 2.4% processing fee will apply. Pickup in London, Ontario.';
+
+const domSources = ['A 16% Buyer’s Premium applies. $1.50 handling fee per item. HST applies.',
+  null, TRUNCATED_NOTICE, 'Pickup in London, Ontario'];
+
+const ctxOf = () => ({ feeSources: domSources, fees: H.parseFees(domSources) });
+
+// The premium and handling are in the visible terms; the card fee is not.
+const domFees = H.parseFees(domSources);
+check('the DOM alone finds the premium', domFees.premiumPct, 16);
+check('the DOM alone finds the handling fee', domFees.perItemFee, 1.5);
+check('but the truncated notice hides the card fee', domFees.cardPct, 0);
+
+const ctxA = ctxOf();
+truthy('the correction reports that something moved',
+  H.correctFees(ctxA, { text: FULL_AUCTION_TEXT, rate: null }));
+check('the card surcharge is recovered', ctxA.fees.cardPct, 2.4);
+check('the premium is unchanged', ctxA.fees.premiumPct, 16);
+check('the handling fee is unchanged', ctxA.fees.perItemFee, 1.5);
+truthy('and the correction is disclosed in the fee notes',
+  ctxA.fees.notes.some((n) => /Corrected from the auction/.test(n)));
+truthy('naming what changed', ctxA.fees.notes.some((n) => /cardPct/.test(n)));
+
+// The memoised fee object must not be written through: a later identical parse
+// would otherwise hand another caller a mutated stack.
+falsy('the original fee object was not mutated', H.parseFees(domSources).cardPct);
+
+// Nothing to add, nothing to redraw.
+const ctxB = ctxOf();
+falsy('no terms text means no correction', H.correctFees(ctxB, { text: '', rate: null }));
+falsy('no terms object at all', H.correctFees(ctxB, null));
+falsy('text that repeats what the DOM said changes nothing',
+  H.correctFees(ctxB, { text: domSources[0], rate: null }));
+
+/*
+ * buyerPremiumRate is a last resort only. It reads 1.0 (0%) on auctions whose
+ * terms plainly say 16%, so it must never beat text that parsed.
+ */
+const noPremiumSources = ['Everything sold as is. HST applies.', null, '', 'London, Ontario'];
+const ctxC = { feeSources: noPremiumSources, fees: H.parseFees(noPremiumSources) };
+truthy('the fallback premium is flagged as a fallback',
+  /fallback/.test(ctxC.fees.premiumSource || ''));
+truthy('the auction’s own rate is applied when the text yielded nothing',
+  H.correctFees(ctxC, { text: 'No premium stated anywhere in here.', rate: 16 }));
+check('and it becomes the premium', ctxC.fees.premiumPct, 16);
+truthy('provenance names buyerPremiumRate', /buyerPremiumRate/.test(ctxC.fees.premiumSource));
+falsy('the fallback complaint is dropped',
+  ctxC.fees.notes.some((n) => /could not be parsed/.test(n)));
+
+const ctxD = ctxOf();
+H.correctFees(ctxD, { text: FULL_AUCTION_TEXT, rate: 25 });
+check('a rate is ignored when the text stated a premium', ctxD.fees.premiumPct, 16);
+
+// ===========================================================================
 console.log(`\n${pass + fail} assertions: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

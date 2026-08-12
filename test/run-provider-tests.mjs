@@ -47,10 +47,34 @@ Object.assign(globalThis, {
   MutationObserver: class { observe() {} disconnect() {} },
   DOMParser: DOMParserImpl,
 });
+/*
+ * The fake body needs a classList.
+ *
+ * These suites await real lookups, so the process stays alive long enough for
+ * watch()'s initial 400ms timer to fire run() — which sets and clears body
+ * classes for the catalog tidy and lot-detail layouts. A bare `body: {}` turned
+ * that into a TypeError that killed the suite mid-run. A browser's body always
+ * has a classList, so the stub was the unrealistic part, not the script.
+ */
+const classListStub = () => {
+  const set = new Set();
+  return {
+    add: (...c) => c.forEach((x) => set.add(x)),
+    remove: (...c) => c.forEach((x) => set.delete(x)),
+    toggle: (c, on) => (on ? set.add(c) : set.delete(c)),
+    contains: (c) => set.has(c),
+  };
+};
 globalThis.document = {
-  body: {}, querySelector: () => null, querySelectorAll: () => [],
+  body: { classList: classListStub(), appendChild() {} },
+  documentElement: { classList: classListStub(), scrollHeight: 0 },
+  querySelector: () => null, querySelectorAll: () => [],
+  getElementsByTagName: () => [],
   getElementById: () => null,
-  createElement: () => ({ style: {}, className: '', setAttribute() {}, appendChild() {}, addEventListener() {}, textContent: '' }),
+  createElement: () => ({
+    style: {}, className: '', classList: classListStub(),
+    setAttribute() {}, appendChild() {}, addEventListener() {}, textContent: '',
+  }),
 };
 globalThis.window = globalThis;
 

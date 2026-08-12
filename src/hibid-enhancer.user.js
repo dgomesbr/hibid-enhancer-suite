@@ -2278,7 +2278,21 @@
    */
   function infoCard() {
     let root = document.getElementById(`${NS}-infocard`);
-    if (root && root.isConnected) return root;
+    if (root && root.isConnected) {
+      /*
+       * Reuse it only if it is the skeleton this version expects. A card left by
+       * a different build of this script — two copies installed at once, or a
+       * stale one surviving a re-render — is missing regions the fill step writes
+       * into, and the result is a card that silently stops updating parts of
+       * itself. Cheaper to check four ids than to debug that.
+       */
+      const complete = [`${NS}-info-facts`, `${NS}-info-chips`, `${NS}-info-desc`,
+        `${NS}-retail-cell`, `${NS}-bid-cell`, `${NS}-bid-title`]
+        .every((id) => root.querySelector(`#${id}`));
+      if (complete) return root;
+      Perf.count('info card rebuilt (unrecognised skeleton)');
+      root.remove();
+    }
 
     const host = Detail.lotContainer();
     if (!host) return null;
@@ -2296,7 +2310,10 @@
           el('div', { id: `${NS}-retail-cell`, class: `${NS}-pricecell` }),
         ]),
         el('div', { class: `${NS}-block` }, [
-          el('div', { class: `${NS}-block-title`, text: 'Bid guidance' }),
+          // "Bid guidance" while the block still holds the numbers; relabelled by
+          // injectBidRow to what is actually left once the summary panel above
+          // has them.
+          el('div', { class: `${NS}-block-title`, id: `${NS}-bid-title`, text: 'Bid guidance' }),
           el('div', { id: `${NS}-bid-cell`, class: `${NS}-pricecell` }),
         ]),
         el('div', { id: `${NS}-info-desc` }),
@@ -2541,7 +2558,10 @@
   // SECTION 13 — Lot detail controller
   // ===========================================================================
 
-  const State = { lastKey: null, running: false, gen: 0 };
+  const State = { lastKey: null, running: false, gen: 0, staleKey: null, staleSince: 0 };
+
+  /** How long enhanceDetail will wait for Angular to render the URL's lot. */
+  const STALE_GRACE_MS = 4000;
 
   /*
    * The detail page is enhanced in two passes so nothing ever waits on the
@@ -2568,14 +2588,68 @@
    * fingerprint (length plus the first 48 characters of each source) rather
    * than recomputed. Hashing the full text would cost as much as the parse.
    */
-  let FEE_MEMO = { key: null, value: null };
+  /*
+   * A handful of entries, not one. A lot page parses fees twice by design — once
+   * from the DOM and once with the auction's own text appended — so a
+   * single-slot cache would be evicted by the other caller on every run and
+   * never hit at all.
+   */
+  const FEE_MEMO = new Map();
+  const FEE_MEMO_MAX = 4;
 
   function feesFor(sources) {
     const key = sources.map((s) => `${(s || '').length}:${(s || '').slice(0, 48)}`).join('|');
-    if (FEE_MEMO.key === key && FEE_MEMO.value) { Perf.count('fee memo hit'); return FEE_MEMO.value; }
+    if (FEE_MEMO.has(key)) { Perf.count('fee memo hit'); return FEE_MEMO.get(key); }
     const value = Perf.span('parseFees', () => parseFees(sources));
-    FEE_MEMO = { key, value };
+    if (FEE_MEMO.size >= FEE_MEMO_MAX) FEE_MEMO.delete(FEE_MEMO.keys().next().value);
+    FEE_MEMO.set(key, value);
     return value;
+  }
+
+  /**
+   * Re-derive the fee stack from the auction's own text.
+   *
+   * The DOM is an unreliable source for fees. HiBid renders roughly the first 400
+   * characters of a notice and then a "Show More" anchor, so anything stated
+   * further in is simply absent from the page: Encore's 2.4% credit-card
+   * surcharge sits about 600 characters into the auction notice and was invisible
+   * to the parser, which quietly under-stated every final cost on the lot.
+   *
+   * Returns true when a number actually moved, so the caller only re-renders when
+   * there is something to correct.
+   */
+  function correctFees(ctx, terms) {
+    if (!terms || !terms.text) return false;
+
+    // Copied before any mutation: feesFor hands out a memoised object that other
+    // callers share, and the premium fallback below writes to it.
+    const fresh = Object.assign({}, feesFor(ctx.feeSources.concat([terms.text])));
+    fresh.notes = (fresh.notes || []).slice();
+
+    /*
+     * Same last-resort rule the catalog uses: buyerPremiumRate is this auction's
+     * own number, so it beats a global default — but only when the text yielded
+     * nothing, because the rate reads 1.0 (0%) on auctions whose terms clearly
+     * say 16%.
+     */
+    if (/fallback/.test(fresh.premiumSource || '') && terms.rate != null) {
+      fresh.premiumPct = terms.rate;
+      fresh.premiumSource = `auction.buyerPremiumRate (${terms.rate}%)`;
+      fresh.notes = fresh.notes.filter((n) => !/premium/i.test(n));
+    }
+
+    const before = ctx.fees || {};
+    const moved = ['premiumPct', 'cardPct', 'perItemFee', 'largeItemFee', 'taxPct']
+      .filter((k) => (before[k] || 0) !== (fresh[k] || 0));
+    if (!moved.length) return false;
+
+    // Say so in the provenance rather than silently changing the ceiling.
+    fresh.notes.push(`Corrected from the auction’s own text after load (${moved.join(', ')}); ` +
+      'the page itself truncates its notices.');
+    ctx.fees = fresh;
+    Perf.count('fee correction');
+    log('fees corrected from GraphQL:', moved.join(', '));
+    return true;
   }
 
   async function enhanceDetail() {
@@ -2596,14 +2670,29 @@
      * The guard only engages when that container exists, so a page or a site
      * variant that does not stamp an id behaves exactly as it did before rather
      * than losing the enhancement entirely.
+     *
+     * And it is bounded, because "wait until the DOM agrees" must never become
+     * "never render at all". If some page renders a neighbouring lot's container,
+     * or keeps two of them, refusing forever would be a worse bug than the one
+     * this fixes. The race it guards closes in a few hundred milliseconds, so
+     * after the grace period we render anyway and say so.
      */
     const wantId = Detail.eventItemId();
     const rendered = document.querySelector('[id^="lot-details-"]');
     if (wantId && rendered && rendered.id !== `lot-details-${wantId}`) {
-      Perf.count('detail: DOM still on the previous lot');
-      log(`detail: URL is lot ${wantId} but the DOM still shows ${rendered.id}; waiting`);
-      return false;
+      if (State.staleKey !== location.pathname) {
+        State.staleKey = location.pathname;
+        State.staleSince = Date.now();
+      }
+      if (Date.now() - State.staleSince < STALE_GRACE_MS) {
+        Perf.count('detail: DOM still on the previous lot');
+        log(`detail: URL is lot ${wantId} but the DOM still shows ${rendered.id}; waiting`);
+        return false;
+      }
+      warn(`detail: DOM still shows ${rendered.id} for lot ${wantId} after ` +
+        `${STALE_GRACE_MS}ms — rendering from it anyway`);
     }
+    State.staleKey = null;
 
     const rows = Perf.span('infoRows', () => Detail.infoRows());
     if (!rows.description && !rows.lead) return false; // panel not rendered yet
@@ -2623,7 +2712,10 @@
     const noticeText = txt(document.querySelector('app-notice'));
     const locationText = txt(document.querySelector('app-lot-details')) || document.body.innerText;
 
-    const fees = feesFor([termsText, payText, noticeText, locationText.slice(0, 4000)]);
+    // Kept on the context so pass 3 can re-parse with the auction's own text
+    // appended instead of re-deriving the DOM half a second later.
+    const feeSources = [termsText, payText, noticeText, locationText.slice(0, 4000)];
+    const fees = feesFor(feeSources);
     const large = isLargeItem(`${lotText}\n${category}`);
     const increments = parseIncrements(Detail.panelText('Bid Increments'));
 
@@ -2702,7 +2794,7 @@
       gen: ++State.gen,
       rows, host, cell, product, fees, large, increments,
       cond, current, next, stated,
-      links, infoModel, hasCard: !!card,
+      links, infoModel, hasCard: !!card, feeSources,
     };
 
     // Provisional render from the auctioneer's own figure — instant, and useful
@@ -2768,17 +2860,34 @@
        * ~1.7s round trips into one, so the enrichment lands in half the time.
        */
       const known = parseAuctionId(catalogHref);
+      /*
+       * auctionTerms is a second query rather than more fields on auctionDetail
+       * so the catalog and the lot page derive fees from one definition of "the
+       * auction's fee text". It runs alongside the others, so the extra request
+       * costs no extra wall-clock time.
+       */
+      const noTerms = { text: '', rate: null };
+      const termsOf = (aid) => GQL.auctionTerms(aid)
+        .catch((e) => { warn('auction terms:', (e && e.message) || e); return noTerms; });
+
       const lotP = GQL.lotDetail(id);
       const auctionP = known ? GQL.auctionDetail(known) : null;
+      const termsP = known ? termsOf(known) : null;
 
       const lot = await Perf.spanAsync('gql lot', lotP);
-      if (auctionP) return { lot, auction: await Perf.spanAsync('gql auction (parallel)', auctionP) };
+      if (auctionP) {
+        return {
+          lot,
+          auction: await Perf.spanAsync('gql auction (parallel)', auctionP),
+          terms: await Perf.spanAsync('gql terms (parallel)', termsP),
+        };
+      }
 
       const chained = lot && lot.auction && lot.auction.id;
-      const auction = chained
-        ? await Perf.spanAsync('gql auction (chained)', GQL.auctionDetail(chained))
-        : null;
-      return { lot, auction };
+      if (!chained) return { lot, auction: null, terms: noTerms };
+      const [auction, terms] = await Perf.spanAsync('gql auction + terms (chained)',
+        Promise.all([GQL.auctionDetail(chained), termsOf(chained)]));
+      return { lot, auction, terms };
     })();
     // A failure must not be cached as the answer for the rest of the visit.
     DETAIL_GQL.promise.catch(() => { if (DETAIL_GQL.id === id) DETAIL_GQL.promise = null; });
@@ -2786,13 +2895,12 @@
   }
 
   async function enrichDetail(ctx) {
-    if (!ctx.hasCard) return;             // nothing to enrich; table fallback is live
     const id = Detail.eventItemId();
     if (!id) return;
 
     Loader.show();
     try {
-      const { lot, auction } = await detailData(id, ctx.links.catalog);
+      const { lot, auction, terms } = await detailData(id, ctx.links.catalog);
       if (ctx.gen !== State.gen) return;  // navigated on
 
       Perf.span('enriched render', () => {
@@ -2816,6 +2924,22 @@
           renderNoticeLinks({ bidding: auction.biddingNotice, auction: auction.auctionNotice });
         }
       });
+
+      /*
+       * Fees last, because correcting them re-renders the money.
+       *
+       * This deliberately moves numbers after the page has settled. The
+       * alternative is worse: leaving a final cost on screen that is knowably
+       * wrong because the page truncated the sentence it was parsed from. The
+       * correction is announced in the fee provenance, and it uses whatever
+       * quotes renderQuotes last had, so a retail price already on screen is not
+       * thrown away — and if the retail lookup lands afterwards it picks up the
+       * corrected stack on its own.
+       */
+      if (correctFees(ctx, terms) && ctx.last) {
+        Perf.span('fee correction re-render', () => renderQuotes(ctx, ctx.last));
+      }
+
       Perf.report('detail + graphql');
     } catch (e) {
       // A missing field or a 500 must never cost the page its DOM-derived card.
@@ -2835,6 +2959,10 @@
   function renderQuotes(ctx, { quotes, errors, pending }) {
     if (ctx.gen !== State.gen) return; // user navigated on; this result is stale
 
+    // Remembered so a fee correction arriving later can redraw the same quotes
+    // instead of discarding a retail price that has already landed.
+    ctx.last = { quotes, errors, pending };
+
     const { rows, host, cell, product, fees, large, increments, cond, next, stated } = ctx;
 
     const best = pickBest(quotes);
@@ -2853,6 +2981,7 @@
     injectBidRow(rows, {
       product, fees, large, increments, retail, retailSource,
       current: ctx.current, next, maxHammer, maxBid, nextCost, nextDisc, cond, pending,
+      hasCard: ctx.hasCard,
     });
 
     // ---- summary panel ---------------------------------------------------
@@ -3068,8 +3197,25 @@
     }
   }
 
-  /** Insert a "Bid guidance" row: the same numbers, compact, on a light row. */
+  /**
+   * The "Bid guidance" block: the same numbers, compact, on a light background.
+   *
+   * Inside the information card the table is suppressed, because the summary
+   * panel a few hundred pixels above prints the identical five rows — max bid,
+   * walk away, next bid, fees & tax, final cost — and printing them twice on one
+   * screen invites the reader to look for a difference that is not there. What
+   * the panel does *not* carry is the fee provenance, so that is what stays.
+   *
+   * The condition is `d.nextCost`, not simply "is there a card": renderQuotes
+   * draws no panel at all when there is no next-bid amount to cost out, and in
+   * that case the table is the only place the ceiling appears.
+   */
   function injectBidRow(rows, d) {
+    const panelCovers = !!(d.hasCard && d.nextCost);
+
+    const title = document.getElementById(`${NS}-bid-title`);
+    if (title) title.textContent = panelCovers ? 'Fees' : 'Bid guidance';
+
     let td = document.getElementById(`${NS}-bid-cell`);
     if (!td) {
       const anchorRow = document.querySelector(`tr.${NS}-row`) ||
@@ -3099,16 +3245,26 @@
     ].filter(Boolean).join(' + ');
 
     if (d.cond.partsOnly) {
-      td.appendChild(el('div', { class: `${NS}-over`, html:
-        '<strong>💀 Parts-only lot — no ceiling recommended.</strong> Value it as spares.' }));
-      if (d.nextCost) {
-        td.appendChild(el('table', { class: `${NS}-mini` }, [el('tbody', {}, [
-          line('Next bid', money(d.next)),
-          line('Fees & tax', `+ ${money(d.nextCost.total - d.next)}`, feeNote),
-          line('Final cost', money(d.nextCost.total), 'what you actually pay', true),
-        ])]));
+      // The panel already says "Parts-only lot — no ceiling recommended", and a
+      // black-and-red banner says it again at the top of the page.
+      if (!panelCovers) {
+        td.appendChild(el('div', { class: `${NS}-over`, html:
+          '<strong>💀 Parts-only lot — no ceiling recommended.</strong> Value it as spares.' }));
+        if (d.nextCost) {
+          td.appendChild(el('table', { class: `${NS}-mini` }, [el('tbody', {}, [
+            line('Next bid', money(d.next)),
+            line('Fees & tax', `+ ${money(d.nextCost.total - d.next)}`, feeNote),
+            line('Final cost', money(d.nextCost.total), 'what you actually pay', true),
+          ])]));
+        }
       }
       appendFeeProvenance(td, d);
+      return;
+    }
+
+    if (panelCovers) {
+      appendFeeProvenance(td, d);
+      if (d.pending) td.appendChild(pendingNote());
       return;
     }
 
@@ -3137,15 +3293,18 @@
       td.appendChild(el('table', { class: `${NS}-mini` }, [el('tbody', {}, body)]));
     }
 
-    if (d.pending) {
-      td.appendChild(el('div', {}, [
-        el('span', { class: `${NS}-dot` }),
-        el('span', { class: `${NS}-spin`, text:
-          ' Provisional — based on the auctioneer’s stated retail. Verifying against live prices…' }),
-      ]));
-    }
+    if (d.pending) td.appendChild(pendingNote());
 
     appendFeeProvenance(td, d);
+  }
+
+  /** The "these numbers are provisional" line, with the pulse dot. */
+  function pendingNote() {
+    return el('div', {}, [
+      el('span', { class: `${NS}-dot` }),
+      el('span', { class: `${NS}-spin`, text:
+        ' Provisional — based on the auctioneer’s stated retail. Verifying against live prices…' }),
+    ]);
   }
 
   /** Fee provenance — so a wrong number is traceable to the text it came from. */
@@ -3950,7 +4109,7 @@
       modelMatches, looksLikeModel, compactTokens, priceFloor, isAccessoryListing,
       Providers, pickBest, lookupRetail,
       parseLotId, parseAuctionId, splitNotice, conditionTone, conditionChips,
-      infoFacts, fmtDateTime, formatAddress, Perf,
+      infoFacts, fmtDateTime, formatAddress, Perf, correctFees,
       setHttp: (fn) => { HTTP = fn || gmHttp; },
       setConfig: (patch) => { CFG = Object.assign({}, CFG, patch); },
     };

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HiBid Enhancer Suite
 // @namespace    https://github.com/dgomesbr/hibid-enhancer-suite
-// @version      0.5.1
+// @version      0.6.0
 // @description  Retail price lookup, fee-aware bid ceilings, and loud condition warnings on HiBid lot pages.
 // @author       dgomesbr
 // @license      MIT
@@ -87,6 +87,10 @@
   const money = (n) =>
     (n == null || !isFinite(n)) ? '—' :
     n.toLocaleString('en-CA', { style: 'currency', currency: 'CAD', maximumFractionDigits: 2 });
+
+  /** Bare 2-dp amount, no currency symbol: "3.04", "1,234.56". */
+  const plain = (n) => (n == null || !isFinite(n)) ? '—'
+    : n.toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   const pct = (n) => (n == null || !isFinite(n)) ? '—' : `${n.toFixed(1)}%`;
 
@@ -360,11 +364,25 @@
       if (m) { out.largeItemFee = parseFloat(m[1]); out.largeItemSource = `parsed: "${m[0].trim()}"`; break; }
     }
 
-    // --- credit-card surcharge ---------------------------------------------
-    const card = all.match(/(\d{1,2}(?:\.\d+)?)\s*%\s*(?:credit\s*)?card/i);
-    if (card) {
+    /*
+     * Credit-card surcharge, in either word order. The terms write it as
+     * "A 2.4% credit card processing fee", but the auction's paymentInfo field
+     * writes the same charge as "Credit card (2.4% processing fee applies)" —
+     * percentage after the noun, which the first pattern cannot see.
+     */
+    const cardPatterns = [
+      /(\d{1,2}(?:\.\d+)?)\s*%\s*(?:credit\s*)?card/i,
+      /(?:credit\s*)?card[^.\n]{0,40}?(\d{1,2}(?:\.\d+)?)\s*%/i,
+    ];
+    for (const re of cardPatterns) {
+      const card = all.match(re);
+      if (!card) continue;
       const v = parseFloat(card[1]);
-      if (v > 0 && v <= 10) { out.cardPct = v; out.cardSource = `parsed: "${card[0].trim()}"`; }
+      if (v > 0 && v <= 10) {
+        out.cardPct = v;
+        out.cardSource = `parsed: "${card[0].trim()}"`;
+        break;
+      }
     }
 
     // --- sales tax ----------------------------------------------------------
@@ -1151,12 +1169,35 @@
     },
   };
 
+  /**
+   * In-flight lookups, keyed exactly like the cache.
+   *
+   * A catalog page routinely lists the same product several times — two
+   * identical curling irons, three of the same headset. The 12h cache only helps
+   * once a result has landed, so without this two tiles in the same batch each
+   * fire their own pair of provider requests for an identical query.
+   */
+  const inflight = new Map();
+
   /** Run the enabled providers and return every quote we managed to get. */
   async function lookupRetail(product) {
-    const cacheKey = `retail:${product.query.toLowerCase()}`;
+    // The price floor is part of the identity of a result: the same query under
+    // a different stated retail can legitimately filter differently.
+    const cacheKey = `retail:${product.query.toLowerCase()}|f${Math.round(priceFloor(product))}`;
     const cached = Cache.get(cacheKey);
     if (cached) { log('cache hit', cacheKey); return cached; }
+    if (inflight.has(cacheKey)) { log('joined in-flight', cacheKey); return inflight.get(cacheKey); }
 
+    const promise = lookupRetailUncached(product, cacheKey);
+    inflight.set(cacheKey, promise);
+    try {
+      return await promise;
+    } finally {
+      inflight.delete(cacheKey);
+    }
+  }
+
+  async function lookupRetailUncached(product, cacheKey) {
     const jobs = [];
     if (CFG.useBestBuy) jobs.push(['bestBuy', Providers.bestBuy(product)]);
     if (CFG.useAmazon) jobs.push(['amazon', Providers.amazon(product)]);
@@ -1299,6 +1340,7 @@
 
     /* ---- Catalog tiles -------------------------------------------------- */
     .${NS}-final{color:#e65100;font-weight:800;white-space:nowrap;}
+    .${NS}-final-est{border-bottom:1px dashed currentColor;cursor:help;opacity:.85;}
     .${NS}-ind{display:inline-block;width:11px;height:11px;border-radius:50%;margin-left:7px;
       vertical-align:middle;border:1px solid rgba(0,0,0,.28);cursor:help;flex:0 0 auto;}
     .${NS}-ind-green{background:#2e9e5b;}
@@ -2013,11 +2055,39 @@
 
     /** The auction's fee text. A catalog page never renders it. */
     async auctionTerms(auctionId) {
-      const query = 'query HesAuction($id: Int!) {' +
-        ' auction(id: $id) { id termsAndConditions buyerPremium } }';
+      /*
+       * Field names were found by asking for candidates and reading the
+       * "Cannot query field X on type 'Auction'" errors, since introspection is
+       * blocked. What each is actually worth, measured on auction 764522:
+       *
+       *   termsAndConditions     the real source — "A 16% Buyer's Premium",
+       *                          "$1.50 handling fee per item", "2.4% credit card".
+       *   paymentInfo            often repeats the card surcharge.
+       *   shippingAndPickupInfo  carries the pickup address ("London, Ontario"),
+       *                          the most reliable province signal for sales tax.
+       *                          A catalog page shows no address at all.
+       *   buyerPremium           frequently useless prose: "Please see Terms and
+       *                          Conditions".
+       *   buyerPremiumRate       a multiplier, and unreliable — reads 1.0 (0%) on
+       *                          this auction while the terms say 16%. Used only
+       *                          as a last resort, and only when plausible.
+       */
+      const query = 'query HesAuction($id: Int!) { auction(id: $id) {' +
+        ' id termsAndConditions buyerPremium buyerPremiumRate paymentInfo' +
+        ' shippingAndPickupInfo auctionNotice biddingNotice } }';
       const data = await GQL.post('HesAuction', query, { id: auctionId });
       const a = (data || {}).auction || {};
-      return [a.termsAndConditions, a.buyerPremium].filter(Boolean).join('\n\n');
+      return {
+        text: [
+          a.termsAndConditions, a.buyerPremium, a.paymentInfo,
+          a.shippingAndPickupInfo, a.auctionNotice, a.biddingNotice,
+        ].filter(Boolean).join('\n\n'),
+        // 1.16 means 16%; 1.0 means "not populated".
+        rate: (typeof a.buyerPremiumRate === 'number' &&
+               a.buyerPremiumRate > 1.0 && a.buyerPremiumRate < 1.5)
+          ? (a.buyerPremiumRate - 1) * 100
+          : null,
+      };
     },
   };
 
@@ -2062,8 +2132,14 @@
       }).filter((t) => t.id && t.node);
     },
 
-    /** "Bid 1.00 CAD" -> "Bid 1.00 (Final $3.04) CAD", idempotently. */
-    setFinal(tile, cost) {
+    /**
+     * "Bid 1.00 CAD" -> "Bid 1.00 (3.04) CAD", idempotently.
+     *
+     * Just the number in brackets: the currency and the "Bid" label are already
+     * on the button, so repeating "Final $" three times per tile across 100 tiles
+     * is noise. The bracketed figure reads as "and this is what it really costs".
+     */
+    setFinal(tile, cost, estimated) {
       const host = tile.amountEl;
       if (!host || !cost) return;
 
@@ -2082,7 +2158,12 @@
         host.appendChild(tag);
         if (m[2]) host.appendChild(document.createTextNode(` ${m[2]}`));
       }
-      tag.textContent = `(Final ${money(cost.total)})`;
+      tag.textContent = `(${plain(cost.total)})`;
+      if (estimated) {
+        tag.classList.add(`${NS}-final-est`);
+        tag.title = 'Estimated: this auction’s terms could not be read, so the ' +
+          `fallback ${CFG.fallbackPremiumPct}% premium was used instead of its real fees.`;
+      }
     },
 
     /** Coloured dot immediately after the shipping icon. */
@@ -2118,16 +2199,22 @@
         : `${pct(info.disc)} off retail (${ind.label})` +
           `\nFinal cost ${money(info.cost.total)} vs ${money(info.retail)} new` +
           (info.source ? ` at ${info.source}` : '') +
-          (info.damaged ? '\n⚠ lot reports damage — retail is for a new unit' : '');
+          (info.damaged ? '\n⚠ lot reports damage — retail is for a new unit' : '') +
+          (info.feesEstimated ? '\n⚠ fees estimated — this auction’s terms could not be read' : '');
     },
 
     async enhance() {
       const tiles = Catalog.tiles();
       if (!tiles.length) return false;
 
-      // Angular re-renders constantly; the same tile set is a no-op.
+      /*
+       * Angular re-renders constantly, and a re-render drops our injected nodes.
+       * Keying on the tile set alone therefore leaves the page permanently bare
+       * after the first re-render, so also require that our marks still exist.
+       */
       const key = tiles.map((t) => t.id).join(',');
-      if (Catalog._done === key) return true;
+      const stillMarked = document.querySelector(`.${NS}-final, .${NS}-ind`);
+      if (Catalog._done === key && stillMarked) return true;
       Catalog._done = key;
 
       Loader.show();
@@ -2136,28 +2223,63 @@
         const ids = tiles.map((t) => t.id);
 
         // Fees and all 100 descriptions in parallel: two requests total.
-        const [termsText, lots] = await Promise.all([
+        const [terms, lots] = await Promise.all([
           auctionId
-            ? GQL.auctionTerms(auctionId).catch((e) => { warn('terms:', e.message); return ''; })
-            : Promise.resolve(''),
+            ? GQL.auctionTerms(auctionId).catch((e) => {
+                warn('terms:', e.message); return { text: '', rate: null };
+              })
+            : Promise.resolve({ text: '', rate: null }),
           GQL.lots(ids).catch((e) => { warn('lots:', e.message); return []; }),
         ]);
+        const termsText = terms.text || '';
 
         const fees = parseFees([termsText, (document.body.innerText || '').slice(0, 4000)]);
+        /*
+         * If the terms could not be fetched, every final price on the page comes
+         * from the fallback premium. On a measured run that was $1.33 instead of
+         * $3.04 - a 2.3x error - with nothing on screen to say so. Catalog tiles
+         * have no room for the detail page's fee-provenance panel, so mark the
+         * number as estimated rather than presenting a guess as fact.
+         */
+        /*
+         * Only if the terms text yielded no premium do we fall back — and even
+         * then buyerPremiumRate beats a blind default, because it is at least
+         * this auction's own number rather than a global guess.
+         */
+        if (/fallback/.test(fees.premiumSource || '') && terms.rate != null) {
+          fees.premiumPct = terms.rate;
+          fees.premiumSource = `auction.buyerPremiumRate (${terms.rate}%)`;
+          fees.notes = fees.notes.filter((n) => !/premium/i.test(n));
+        }
+        const feesEstimated = /fallback/.test(fees.premiumSource || '');
+        if (feesEstimated) warn('auction terms unavailable - final prices use fallback fees');
         const byId = new Map(lots.map((l) => [l.id, l]));
 
         // ---- pass 1: final price on every tile, zero network per lot ------
         const work = [];
+        const costByBucket = new Map();
         for (const tile of tiles) {
           const lot = byId.get(tile.id) || {};
           const lead = lot.lead || tile.title || '';
           const description = lot.description || '';
           const cond = assessCondition([lead, description].join('\n'));
           const large = isLargeItem(`${lead}\n${description}`);
+          /*
+           * Bucket by (bid, large-item): on a catalog page sorted by bid count,
+           * dozens of lots sit at the same opening bid, and the fee stack is
+           * identical for all of them. One allIn() per distinct bucket instead
+           * of one per tile — on the measured page that is 100 tiles collapsing
+           * to a handful of computations.
+           */
           const next = num(txt(tile.amountEl));
-          const cost = next != null ? allIn(next, fees, { large }) : null;
+          let cost = null;
+          if (next != null) {
+            const bucket = `${next}|${large ? 'L' : ''}`;
+            if (!costByBucket.has(bucket)) costByBucket.set(bucket, allIn(next, fees, { large }));
+            cost = costByBucket.get(bucket);
+          }
 
-          Catalog.setFinal(tile, cost);
+          Catalog.setFinal(tile, cost, feesEstimated);
           Catalog.setIndicator(tile, { pending: true });
 
           const product = extractProduct(lead, description);
@@ -2189,6 +2311,7 @@
               source: best ? best.provider : (w.stated ? 'auctioneer’s figure' : null),
               partsOnly: w.cond.partsOnly,
               damaged: w.cond.damaged,
+              feesEstimated,
             });
           }));
           // Be a polite client between batches.

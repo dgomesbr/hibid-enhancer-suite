@@ -141,6 +141,44 @@ check('used is used when nothing new exists',
   H.pickBest([mixed[0]]).price, 150);
 
 // ===========================================================================
+console.log('\n3b. Concurrent identical lookups are deduped');
+// ===========================================================================
+/*
+ * A catalog page routinely lists the same product several times. The 12h cache
+ * only helps once a result has landed, so two tiles in the same batch would each
+ * fire their own pair of provider requests for an identical query.
+ */
+// Section 3 cached this query; start from cold or the dedupe path never runs.
+for (const k of [...store.keys()]) if (k.startsWith('hes:cache:')) store.delete(k);
+
+let calls = 0;
+H.setHttp(async ({ url }) => {
+  calls++;
+  await new Promise((r) => setTimeout(r, 40));   // keep both requests in flight
+  if (url.includes('amazon.ca')) return { status: 200, responseText: amazonHtml };
+  if (url.includes('bestbuy.ca')) return { status: 200, responseText: bestbuyJson };
+  throw new Error(`unstubbed ${url}`);
+});
+
+const dedupeProduct = H.extractProduct('Retail $328.00 | Sony WF-1000XM5 Dedupe Probe', '');
+const [a, b, c] = await Promise.all([
+  H.lookupRetail(dedupeProduct),
+  H.lookupRetail(dedupeProduct),
+  H.lookupRetail(dedupeProduct),
+]);
+check('three concurrent lookups cost one provider pair', calls, 2);
+truthy('all three callers got a result', !!(a && b && c));
+check('and they are the identical object', a === b && b === c, true);
+
+// A different stated retail is a different price floor, so it is a distinct
+// result and must not reuse the previous one.
+const floored = H.extractProduct('Retail $328.00 | Sony WF-1000XM5 Dedupe Probe', '');
+floored.statedRetail = 328;
+calls = 0;
+await H.lookupRetail(floored);
+truthy('a different price floor is looked up separately', calls > 0);
+
+// ===========================================================================
 console.log('\n4. Failure handling');
 // ===========================================================================
 H.setHttp(async () => { throw new Error('boom'); });

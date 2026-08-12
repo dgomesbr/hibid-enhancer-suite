@@ -13,8 +13,8 @@ nobody.
 | Where | Example |
 |---|---|
 | `src/hibid-enhancer.user.js` → `// @version` | `0.4.0` |
-| `package.json` → `"version"` | `0.5.1` |
-| the git tag | `v0.5.1` |
+| `package.json` → `"version"` | `0.6.0` |
+| the git tag | `v0.6.0` |
 
 `npm test` fails if the first two disagree — that check exists precisely so a
 forgotten bump cannot become a silent non-release.
@@ -80,6 +80,7 @@ the parser fix so the suite keeps its teeth.
 
 | Version | Highlights |
 |---|---|
+| `v0.6.0` | Catalog: bracketed final price `(3.04)`, fee memoisation by price bucket, deduped concurrent lookups, fee text from every GraphQL field, and a visible marker when fees had to be guessed. |
 | `v0.5.1` | Reject component-part accessories (rear baffle, I/O shield, bracket) and anything under 30% of the auctioneer's stated retail. |
 | `v0.5.0` | Catalog pages: final price on every bid button and a colour-coded deal dot per lot, driven by GraphQL and batched lookups. |
 | `v0.4.0` | Condition accuracy: CR-separated field blocks, the "N/A" false positive, three-level severity, boundary-aware model matching. Measured 54/100 false parts-only down to 0. |

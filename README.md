@@ -205,7 +205,7 @@ On a catalog page (`/catalog/<id>`) every lot tile gets two additions:
 
 | | |
 |---|---|
-| **Final price on the bid button** | `Bid 1.00 CAD` becomes `Bid 1.00 (Final $1.33) CAD` — the real out-the-door cost of that bid under the auction's own fees. |
+| **Final price on the bid button** | `Bid 1.00 CAD` becomes `Bid 1.00 (3.04) CAD` — the real out-the-door cost of that bid under the auction's own fees. Just the bracketed number: the currency and the "Bid" label are already on the button. A dashed underline means the auction's terms could not be read and the figure uses the fallback premium. |
 | **Deal dot after the shipping icon** | Colour-coded by final cost as a share of the new price. Hover for the discount. |
 
 | Dot | Final cost vs new | Meaning |
@@ -240,6 +240,19 @@ Neither needs authentication for public catalogs. Then:
 Results are cached 12 h per query, so a second visit — or another page of the
 same auction with overlapping products — paints almost instantly. Navigating
 away mid-sweep abandons the remaining batches.
+
+Three further savings, measured on that same 100-lot page:
+
+| | |
+|---|---|
+| **Fees memoised by price bucket** | Lots at the same bid with the same large-item status have an identical fee stack. On a page sorted by bid count every lot opened at $1.00, so **100 fee computations collapsed to 1**. |
+| **Concurrent duplicate lookups joined** | Catalogs list the same product repeatedly. The 12 h cache only helps once a result has landed, so two tiles in the same batch would each fire their own provider pair. **83 distinct queries covered 100 lots.** |
+| **Two requests to HiBid, not 100** | Both GraphQL calls together, for the whole page. |
+
+If the auction's terms cannot be read, every final price would silently come from
+the fallback premium — on one run that was $1.33 instead of $3.04, a 2.3× error
+with nothing on screen to say so. The bracketed figure now carries a dashed
+underline and a tooltip in that case, and the deal dot's tooltip says so too.
 
 ### Known limitation
 

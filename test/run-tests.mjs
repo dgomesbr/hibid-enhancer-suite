@@ -146,6 +146,27 @@ check('falls back to 18% premium', v4.premiumPct, 18);
 check('QC = 14.975%', v4.taxPct, 14.975);
 truthy('fallback is flagged in notes', v4.notes.length > 0);
 
+console.log('\n1c. Fee text pulled from every GraphQL field, not just the terms');
+/*
+ * A catalog page renders no fee text at all, so it comes from GraphQL. The
+ * structured fields are not trustworthy — on auction 764522 `buyerPremium` reads
+ * "Please see Terms and Conditions" and `buyerPremiumRate` reads 1.0 (0%) while
+ * the terms say 16% — so several free-text fields are parsed together.
+ */
+const GQL_TERMS = 'A 16% Buyer’s Premium\nHarmonized Sales Tax (HST)\nA $1.50 handling fee per item';
+const GQL_PAYMENT = 'Credit card (2.4% processing fee applies)';
+const GQL_PICKUP = 'Pickup is available only at: 23 Buchanan Court, London, Ontario';
+const gqlFees = H.parseFees([GQL_TERMS, 'Please see Terms and Conditions', GQL_PAYMENT, GQL_PICKUP]);
+check('premium from termsAndConditions', gqlFees.premiumPct, 16);
+check('handling from termsAndConditions', gqlFees.perItemFee, 1.5);
+check('card fee from paymentInfo', gqlFees.cardPct, 2.4);
+check('province from the pickup address', gqlFees.taxPct, 13);
+truthy('nothing was defaulted', !/fallback/.test(gqlFees.premiumSource));
+
+// The pickup address is the only province signal a catalog page has — without
+// shippingAndPickupInfo this auction would fall back to the default rate.
+check('"London, Ontario" resolves to ON', H.detectTax(GQL_PICKUP).province, 'ON');
+
 // ===========================================================================
 console.log('\n2. Bid increments');
 // ===========================================================================

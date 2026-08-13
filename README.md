@@ -125,6 +125,27 @@ Everything above in depth, with the measurements behind it:
 | [Performance](docs/performance.md) | What was measured, what was expensive, and the fixes that were tried and reverted. |
 | [Development](docs/development.md) | Tests, the icon pipeline, page coverage, known limits. |
 | [Releasing](RELEASING.md) | Why every fix ships as a tagged, published release. |
+| [Contributing](CONTRIBUTING.md) | Reporting a wrong price match, running the tests, and the rules learned the hard way. |
+
+---
+
+## Not affiliated with HiBid
+
+**This project has no affiliation with HiBid, with any auctioneer who lists on
+HiBid, or with any retailer whose prices it reads.** None of them endorses,
+sponsors or reviews it. "HiBid" appears here only to say which website this works
+on.
+
+It is an independent userscript, written as an exercise in improving the buying
+experience on a site people already use. It runs in your own browser, on pages you
+have already opened, and it changes nothing for anyone but you. It reads what's on
+the page and shows you the arithmetic HiBid leaves you to do in your head. It
+doesn't bid, doesn't touch your account, and sends nothing anywhere except the
+product search it uses to find a price.
+
+Numbers on screen are estimates from parsed free text, so treat them as a
+starting point rather than an authority. The auctioneer's own terms are the only
+binding statement of what you'll pay.
 
 ---
 

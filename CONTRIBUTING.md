@@ -90,13 +90,38 @@ When you refresh a fixture because a retailer changed their markup, do it in the
 same commit as the parser fix. A stale fixture is a test that has quietly stopped
 having teeth.
 
+## A feature starts with an issue
+
+Before writing code for a new feature, open a
+[feature request](https://github.com/dgomesbr/hibid-enhancer-suite/issues/new?template=01-feature-request.yml)
+for it — including if you are the one who will build it. The form's questions are
+the ones that decide whether it is worth building, and answering them afterwards
+produces a justification rather than a decision. Add the reasoning too: the
+approach, what you considered and rejected, and what would make this the wrong
+call.
+
+Then post progress on the issue as you go, at the points somebody following along
+would want to know something: an assumption that turned out to be wrong, a number
+you measured, built-but-not-yet-released, blocked. Reference the issue in commit
+messages (`… (#12)`) so the timeline shows the work.
+
+The issue closes when the **release** ships, not when the code merges — see below
+for why those are different here — with a comment naming the version, so it answers
+"which release do I need?" from its own last line.
+
+Bug fixes, typos, docs, tests and refactors with no user-visible change are exempt.
+A bug has [its own form](https://github.com/dgomesbr/hibid-enhancer-suite/issues/new?template=02-bug-report.yml).
+
 ## Every change ships as a tagged release
 
 Installed copies only update through `@updateURL`, and Tampermonkey only offers
 an update when `@version` has increased. A merged fix with an unbumped version
-reaches nobody, so there is no "just merge it" path. `npm test` fails if
-`@version` and `package.json` disagree, precisely so a forgotten bump cannot
-become a silent non-release.
+reaches nobody, so there is no "just merge it" path, and "merged" is not the same
+as "delivered". `npm test` fails if `@version` and `package.json` disagree,
+precisely so a forgotten bump cannot become a silent non-release.
+
+Docs-only and asset-only changes are the exception: nothing installable changed, so
+no bump.
 
 Full process in **[RELEASING.md](RELEASING.md)**.
 

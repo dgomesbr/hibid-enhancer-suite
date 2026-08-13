@@ -1,0 +1,131 @@
+name: Bug report
+description: Something is wrong, missing, or showing the wrong number
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **The lot URL is the single most useful thing you can give us.** Nearly every bug
+        in this project's history came down to one auctioneer's odd wording, and without
+        the page we cannot reproduce it or turn it into a test.
+
+        If a price looks wrong, please still file it. A $15 phone case posing as a $600
+        phone is the most common failure mode there is, and each report has produced a
+        rule that stops a whole class of them.
+
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What kind of problem?
+      options:
+        - Wrong retail price — it matched the wrong product
+        - No retail price — grey dot, or the Retail row never appears
+        - Wrong fees, tax or final cost
+        - Wrong parts-only or damaged warning — or one that should have fired and did not
+        - Layout is broken, overlapping, or something is missing from the page
+        - Nothing happens at all — the script does not seem to run
+        - Slow, or the page hangs
+        - Something else
+    validations:
+      required: true
+
+  - type: input
+    id: lot-url
+    attributes:
+      label: Lot or page URL
+      description: The exact page. Paste it even if you think it is a general problem.
+      placeholder: https://encoreauctions.hibid.com/lot/317094503/…
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What did the page show?
+      description: >
+        What you saw, in numbers where you can. A screenshot of the lot page is worth
+        more than a description of it — drag it in here.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect instead?
+      description: >
+        If you know the right answer — the real retail price, the correct premium, the
+        product it should have found — put it here.
+    validations:
+      required: true
+
+  - type: textarea
+    id: wrong-match
+    attributes:
+      label: If a price matched the wrong product
+      description: >
+        Fill this in for a wrong-match report and skip it otherwise. The matched product
+        title is on the Retail row, next to the price.
+      value: |
+        It matched:
+        It should have matched:
+        Link to the correct product (Amazon.ca, Best Buy, anywhere):
+    validations:
+      required: false
+
+  - type: input
+    id: version
+    attributes:
+      label: Script version
+      description: >
+        Tampermonkey dashboard, next to "HiBid Enhancer Suite". Please check for updates
+        first — the fix may already be released.
+      placeholder: "0.12.1"
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Browser and userscript manager
+      placeholder: Chrome 127 on Windows 11, Tampermonkey 5.2.0
+    validations:
+      required: true
+
+  - type: textarea
+    id: console
+    attributes:
+      label: Console output
+      description: >
+        Open DevTools with F12, go to the Console tab, filter for `hes`, and reload the
+        page. Everything the script logs is prefixed `[hes]`. Paste what you get, errors
+        or not — the absence of any `[hes]` line is itself a strong clue.
+      render: text
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: ruled-out
+    attributes:
+      label: Ruled out
+      description: >
+        These three account for a good share of reports that turn out not to be bugs.
+        They are quick, and doing them first often tells you the answer.
+      options:
+        - label: >
+            I am on the latest version (Tampermonkey → Utilities → Check for userscript
+            updates).
+          required: true
+        - label: >
+            I cleared the price cache and reloaded (Tampermonkey menu → "HiBid Enhancer:
+            clear price cache"). Quotes are kept for 12 hours, so a stale one can outlive
+            the fix that should have removed it.
+          required: true
+        - label: >
+            I have only one copy of the script installed and enabled. Two copies fight
+            over the same page and produce symptoms that look nothing like their cause.
+          required: true
+        - label: >
+            I allowed Tampermonkey to reach amazon.ca and bestbuy.ca. Denying it disables
+            retail lookups, which reads as "no price found".
+          required: false

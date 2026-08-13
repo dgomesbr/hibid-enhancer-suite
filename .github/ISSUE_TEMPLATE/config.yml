@@ -1,0 +1,9 @@
+blank_issues_enabled: true
+contact_links:
+  - name: A problem with an auction, a bid, a payment or a pickup
+    url: https://github.com/dgomesbr/hibid-enhancer-suite#not-affiliated-with-hibid
+    about: >
+      This project is not affiliated with HiBid or with any auctioneer listing on it, and
+      nobody here can see your account, your bids or your invoices. Take those to the
+      auctioneer who ran the sale, or to HiBid. Issues here are only about the userscript
+      itself.

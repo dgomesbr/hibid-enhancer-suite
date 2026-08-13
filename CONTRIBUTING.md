@@ -24,12 +24,21 @@ Include:
 - **what it matched** (the product title and price shown on the Retail row),
 - **what it should have matched**, if you know.
 
-That is enough to turn into a test. `docs/retail-matching.md` lists the traps
-already handled: a $15 phone case posing as a $600 phone, a rear cooling baffle
-posing as a motherboard, a TPM module posing as the board it plugs into.
+That is enough to turn into a test. [docs/retail-matching.md](docs/retail-matching.md)
+lists the traps already handled: a $15 phone case posing as a $600 phone, a rear
+cooling baffle posing as a motherboard, a TPM module posing as the board it plugs
+into.
 
-For anything else, say what the page showed and what you expected. A screenshot
-of the lot page beats a description of it.
+For anything else, say what the page showed and what you expected. A screenshot of
+the lot page beats a description of it.
+
+The **[bug report form](https://github.com/dgomesbr/hibid-enhancer-suite/issues/new?template=02-bug-report.yml)**
+asks for all of this, and the
+**[feature request form](https://github.com/dgomesbr/hibid-enhancer-suite/issues/new?template=01-feature-request.yml)**
+asks which page, who you are as a bidder, and what decision the feature would help
+you make. Use them rather than a blank issue; the required fields are the ones that
+turn out to matter, and the checkboxes at the end rule out the three things that
+most often look like bugs and are not.
 
 ---
 

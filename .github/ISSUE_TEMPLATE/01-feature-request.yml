@@ -1,0 +1,114 @@
+name: Feature request
+description: Suggest something the script should do on a HiBid page
+title: "[feature] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting something.
+
+        The three questions that decide whether an idea gets built are **which page**,
+        **who you are**, and **why you need it**. The last one matters most: this script
+        exists to make one decision faster — is this lot worth bidding on — and the
+        features that survived are the ones where somebody could say what decision they
+        were stuck on.
+
+  - type: dropdown
+    id: page
+    attributes:
+      label: Which HiBid page?
+      description: Where would this appear? Pick the closest one.
+      options:
+        - Lot detail — a single lot (/lot/…)
+        - Catalog or lot list — 100 lots at a time (/catalog/…)
+        - Current bids — lots I have bid on (/account/currentbids)
+        - Watch list (/account/watchlist)
+        - Search results (/lots, /search) — not yet supported
+        - Auction listing (/auction/…) — not yet supported
+        - Several pages, or everywhere
+        - Not page-specific — settings, the icon, docs, install
+    validations:
+      required: true
+
+  - type: input
+    id: example-url
+    attributes:
+      label: An example URL
+      description: >
+        A real page that shows the problem. Optional, but it turns an abstract request
+        into something that can be checked against real markup.
+      placeholder: https://encoreauctions.hibid.com/lot/317094078/…
+    validations:
+      required: false
+
+  - type: textarea
+    id: about-you
+    attributes:
+      label: Tell us about you as a bidder
+      description: >
+        Not a formality — it changes what gets built. Somebody scanning 500 lots a week
+        for resale needs different things from somebody watching one appliance auction a
+        month, and a feature that helps one can be noise for the other. Roughly how
+        often do you bid, what do you buy, and are you doing this for yourself or as a
+        business?
+      placeholder: >
+        I bid most weeks on liquidation auctions in Ontario, mostly small electronics and
+        tools that I resell. I usually have 20 to 40 lots on the go at once, so I am
+        scanning lists far more than I am reading individual lots.
+    validations:
+      required: true
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What should it do?
+      description: >
+        Describe what you would see on the page. If it is a number, say where it should
+        appear and what it should be next to.
+    validations:
+      required: true
+
+  - type: textarea
+    id: why
+    attributes:
+      label: Why do you need it? What decision does it help you make?
+      description: >
+        What are you trying to work out that the page will not tell you today, and what
+        goes wrong without it — a bid you would not have placed, a lot you missed, time
+        spent on arithmetic. Be concrete; a real story beats a general principle.
+      placeholder: >
+        I keep bidding on lots and only finding out at checkout that the pickup is four
+        hours away, so I want the distance on the tile before I bid, not after I win.
+    validations:
+      required: true
+
+  - type: textarea
+    id: today
+    attributes:
+      label: What do you do about it today?
+      description: >
+        Your workaround, even if it is a spreadsheet, a mental rule, or giving up.
+        Workarounds are the best description of a missing feature there is.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Before you post
+      description: >
+        A few things are permanently out of scope, so an idea that needs one of them
+        cannot be built however good it is. Details in
+        [CONTRIBUTING](https://github.com/dgomesbr/hibid-enhancer-suite/blob/main/CONTRIBUTING.md#what-is-out-of-scope).
+      options:
+        - label: >
+            This does not involve placing, raising or retracting a bid. The script reads
+            and advises; every bid stays a human decision.
+          required: true
+        - label: >
+            This does not need an API key, an account, a signup, or my HiBid login token.
+            Install-and-it-works is a hard constraint.
+          required: true
+        - label: I searched existing issues and this is not already requested.
+          required: true

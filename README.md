@@ -123,6 +123,7 @@ Everything above in depth, with the measurements behind it:
 | [Finding the right product](docs/retail-matching.md) | Why a $15 accessory kept posing as a $120 motherboard, and the rules that stop it. |
 | [Where prices come from](docs/PRICING-SOURCES.md) | Every Canadian pricing source evaluated, and why there is no free Amazon API. |
 | [Performance](docs/performance.md) | What was measured, what was expensive, and the fixes that were tried and reverted. |
+| [HiBid's GraphQL endpoint](docs/graphql.md) | Every type and field the site uses for an auction, which ones lie, and which ones do not exist. |
 | [Development](docs/development.md) | Tests, the icon pipeline, page coverage, known limits. |
 | [Releasing](RELEASING.md) | Why every fix ships as a tagged, published release. |
 | [Contributing](CONTRIBUTING.md) | Reporting a wrong price match, running the tests, and the rules learned the hard way. |

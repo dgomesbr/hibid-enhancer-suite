@@ -1,8 +1,8 @@
 # Working agreements for this repo
 
-Instructions for anyone doing work here, human or agent. Two rules govern
-everything else, and both exist because "merged" does not mean "delivered" on this
-project.
+Instructions for anyone doing work here, human or agent. Three rules govern
+everything else: file the issue first, ship every change as a release, and run
+anything public through the slop check before it goes out.
 
 ## 1. A feature starts with an issue, and ends when the issue closes
 
@@ -75,6 +75,45 @@ Docs-only and asset-only changes are the exception: nothing installable changed,
 no bump.
 
 Full process in [RELEASING.md](RELEASING.md).
+
+## 3. Anything public goes through the slop check
+
+This repo is public, so the writing is part of the product. Issue bodies, issue
+comments, release notes, PR titles and descriptions, commit messages, README and
+docs all get checked before they go out — not only the docs.
+
+```bash
+npm run prose -- issue.md              # a file
+npm run prose:docs                     # README, CLAUDE, CONTRIBUTING, RELEASING, docs/
+git log -1 --pretty=%B | npm run prose -- -    # anything, via stdin
+gh issue view 12 --json body -q .body | npm run prose -- -
+```
+
+Write the text into a file first and pass it to `--body-file` or `--notes-file`,
+rather than typing it inline. That is what makes checking possible at all: text
+already posted can be edited, but it has been read by then.
+
+`tools/check-prose.mjs` wraps the
+[avoid-ai-writing](https://github.com/conorbronsdon/avoid-ai-writing) detector. It
+fails on the tells that mean the text reads as machine-written — Tier 1/2/3 vocabulary,
+formulaic openers, invisible-character contamination, a score above 15, or any
+classification other than `HUMAN_ONLY`. Em-dash and bold density, vocabulary
+diversity and the other stylometric measures are reported and left to judgement,
+because this project's docs lead paragraphs in bold deliberately.
+
+Three things worth knowing before you trust it:
+
+- **It is not part of `npm test`, on purpose.** The detector is an installed skill
+  living outside the repo, and a gate that quietly passes when its engine is absent
+  is worse than no gate. Missing detector exits 3 and says the text was *unchecked*
+  rather than clean. Point `AVOID_AI_WRITING` at your copy if it is somewhere
+  unusual; a pinned path that does not resolve is an error rather than a fallback.
+- **A clean score is not the goal.** The detector catches vocabulary, not vagueness.
+  It will pass a paragraph that says nothing. Name the actual bug, the actual number,
+  the actual page.
+- **It cannot tell a quotation from an assertion**, and blockquotes do not suppress a
+  flag. Text that quotes slop as an example fails on the quoted words. Since this is
+  run by hand and not in CI, that call is yours to make.
 
 ## Before you finish
 

@@ -10,7 +10,9 @@
     "test:providers": "node test/run-provider-tests.mjs",
     "check": "node --check src/hibid-enhancer.user.js",
     "icon": "python tools/make-icon.py",
-    "test:cache": "node test/run-cache-tests.mjs"
+    "test:cache": "node test/run-cache-tests.mjs",
+    "prose": "node tools/check-prose.mjs",
+    "prose:docs": "node tools/check-prose.mjs README.md CONTRIBUTING.md CLAUDE.md RELEASING.md docs/deal-math.md docs/lot-detail.md docs/catalog.md docs/current-bids.md docs/retail-matching.md docs/performance.md docs/development.md docs/PRICING-SOURCES.md"
   },
   "devDependencies": {
     "linkedom": "^0.18.0"

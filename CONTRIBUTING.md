@@ -202,12 +202,36 @@ faster it makes a page feel.
 non-technical. Everything technical goes in `docs/`, with a row in the README's
 table of contents so it can be found.
 
-Docs go through the [avoid-ai-writing](https://github.com/conorbronsdon/avoid-ai-writing)
-detector before merging. Write plainly, name the actual bug or measurement, and
-skip the throat-clearing.
-
 Screenshots live in `docs/`. Retaking one means disabling any installed copy of
 the script first, or you will publish a picture of an older build.
+
+## Writing that goes out in public
+
+The repo is public, so the writing is part of the product. Issue bodies and
+comments, release notes, PR descriptions, commit messages, the README and `docs/`
+all go through the
+[avoid-ai-writing](https://github.com/conorbronsdon/avoid-ai-writing) detector
+before they are posted:
+
+```bash
+npm run prose -- issue.md      # a file
+npm run prose:docs             # every doc in the repo
+git log -1 --pretty=%B | npm run prose -- -
+```
+
+It fails on the tells that make text read as machine-written: Tier 1/2/3
+vocabulary, formulaic openers, invisible characters, or a score above 15. Em-dash
+and bold density are reported and left to your judgement, since the docs here lead
+paragraphs in bold on purpose.
+
+It is deliberately **not** part of `npm test`, because the detector is installed
+outside the repo and a gate that passes when its engine is missing is worse than no
+gate. A missing detector exits 3 and tells you the text was unchecked rather than
+clean.
+
+Passing is the floor, not the goal. The detector catches vocabulary, not vagueness,
+and will happily pass a paragraph that says nothing. Write plainly, name the actual
+bug or measurement, and skip the throat-clearing.
 
 ## What is out of scope
 

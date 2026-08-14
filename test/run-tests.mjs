@@ -827,6 +827,71 @@ check('nonsense is not a date', H.fmtDateTime('soon'), null);
 check('no timestamp at all', H.fmtDateTime(null), null);
 check('an impossible month is rejected', H.fmtDateTime('2026-13-01T10:00:00'), null);
 
+// -- time left to bid ------------------------------------------------------
+/*
+ * Two sources, and they disagree on purpose. lotState.timeLeft is per-lot and is
+ * what HiBid renders itself, so it wins whenever it is populated: on an auction
+ * that staggers lot closes, the auction-wide close time is simply wrong for most
+ * lots. It comes back empty on plenty of auctions (every lot of 764522 measured
+ * empty), which is the whole reason there is a fallback at all.
+ */
+const AT = new Date(2026, 7, 14, 12, 0, 0).getTime();   // 14 Aug 2026, local noon
+
+check('HiBid\'s own string wins when populated',
+  H.timeLeft('6d 23h 15m', '2026-08-16T18:00:00', AT).text, '6d 23h');
+check('and is marked as coming from the lot',
+  H.timeLeft('6d 23h 15m', null, AT).source, 'lot');
+check('three units are cut to two, since minutes are noise beside days',
+  H.timeLeft('2d 5h 44m', null, AT).text, '2d 5h');
+check('hours and minutes survive when there are no days',
+  H.timeLeft('5h 44m', null, AT).text, '5h 44m');
+check('a lone unit stays alone', H.timeLeft('44m', null, AT).text, '44m');
+check('zero leading units are dropped rather than printed as 0d',
+  H.timeLeft('0d 3h 20m', null, AT).text, '3h 20m');
+
+// The empty string is the case that made this feature necessary.
+check('an empty timeLeft falls through to the auction close',
+  H.timeLeft('', '2026-08-16T18:00:00', AT).text, '2d 6h');
+check('and says so, so the tooltip can explain the difference',
+  H.timeLeft('', '2026-08-16T18:00:00', AT).source, 'auction');
+check('a null timeLeft falls through too',
+  H.timeLeft(null, '2026-08-14T13:30:00', AT).text, '1h 30m');
+
+/*
+ * The auction stamp carries no offset and is already the auction's wall clock, so
+ * it is compared against a local clock rather than parsed as UTC. Parsing it as
+ * UTC would move a close by hours for anyone not on GMT, in the same way that bug
+ * would have reprinted a 7pm close as 11pm.
+ */
+check('a close later today is hours, not a day',
+  H.timeLeft('', '2026-08-14T20:00:00', AT).text, '8h');
+check('under a minute reports seconds',
+  H.timeLeft('', '2026-08-14T12:00:30', AT).text, '30s');
+
+// Nothing to show must be null, never a zero or a negative.
+check('a close already past is nothing, not "-1d"',
+  H.timeLeft('', '2026-08-13T18:00:00', AT), null);
+check('the exact close moment is over', H.timeLeft('', '2026-08-14T12:00:00', AT), null);
+check('no time information at all', H.timeLeft('', null, AT), null);
+check('neither source', H.timeLeft(null, null, AT), null);
+check('an unparseable close time', H.timeLeft('', 'sometime soon', AT), null);
+check('a timeLeft of all zeroes is nothing', H.timeLeft('0d 0h 0m', null, AT), null);
+
+// Urgency drives colour only, so the thresholds are worth pinning down.
+check('over a day is calm', H.timeLeft('', '2026-08-16T18:00:00', AT).urgency, '');
+check('inside a day is soon', H.timeLeft('', '2026-08-14T20:00:00', AT).urgency, 'soon');
+check('inside an hour is now', H.timeLeft('', '2026-08-14T12:30:00', AT).urgency, 'now');
+check('exactly an hour is still soon, not now',
+  H.timeLeft('', '2026-08-14T13:00:00', AT).urgency, 'soon');
+check('urgency is graded from the native string too',
+  H.timeLeft('45m', null, AT).urgency, 'now');
+check('a long native string is calm', H.timeLeft('6d 23h', null, AT).urgency, '');
+
+// HiBid sometimes puts a word there instead of a duration.
+check('a word is passed through', H.timeLeft('Closed', null, AT).text, 'Closed');
+check('but claims no urgency, since it is not a countdown',
+  H.timeLeft('Closed', null, AT).urgency, '');
+
 // -- addresses -------------------------------------------------------------
 check('a full auctioneer address',
   H.formatAddress({ address: '23 Buchanan Crt', city: 'London', state: 'ON', postalCode: 'N5Z 4P9' }),

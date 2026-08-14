@@ -80,6 +80,7 @@ the parser fix so the suite keeps its teeth.
 
 | Version | Highlights |
 |---|---|
+| `v0.13.0` | Time left to bid on current-bids tiles, on one line with the bid count and status. Notes hidden, Unwatch kept. 283px → 260px per tile. |
 | `v0.12.1` | Lots you were outbid on and shouldn't chase are faded to 50%. Lots you're winning above retail stay bright. |
 | `v0.12.0` | Current-bids page: final price, deal dots and a raise / hold / let-go verdict per lot, with per-auction fees and no credential handling. |
 | `v0.11.0` | Catalog no longer paces work that makes no requests, and stops forcing a layout to find a province it usually already knows. |

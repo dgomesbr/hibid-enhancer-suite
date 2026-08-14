@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HiBid Enhancer Suite
 // @namespace    https://github.com/dgomesbr/hibid-enhancer-suite
-// @version      0.12.1
+// @version      0.13.0
 // @description  Retail price lookup, fee-aware bid ceilings, and loud condition warnings on HiBid lot pages.
 // @author       dgomesbr
 // @license      MIT
@@ -1553,6 +1553,30 @@
     .${NS}-foot-body{margin:6px 0 10px;font-size:13px;line-height:1.55;color:#31414f;
       white-space:pre-wrap;max-height:340px;overflow:auto;}
 
+    /* Current-bids tiles: bid count, time left and status on one line.
+
+       The status row and the Notes control are hidden rather than removed, for
+       the usual reason — Angular owns both and re-creates them, and deleting a
+       node it is tracking can blank the tile. Both rules are scoped to
+       body.hes-bids so a catalog page, which shares this tile markup, keeps its
+       own layout. */
+    body.${NS}-bids .lot-tile-bid-status{display:none !important;}
+    body.${NS}-bids app-watch-notes{display:none !important;}
+    body.${NS}-bids .bids-and-links{display:flex;flex-wrap:wrap;align-items:baseline;
+      justify-content:center;gap:0 8px;}
+    body.${NS}-bids .lot-bid-history-container{display:contents;}
+    .${NS}-meta{display:inline-flex;align-items:baseline;gap:8px;font-size:12.5px;
+      line-height:1.3;}
+    /* Separators as pseudo-elements: they belong to the gap, not to the text, so
+       a missing time or status leaves no orphaned bullet behind. */
+    .${NS}-meta>*+*::before{content:'·';color:#9fb0bd;margin-right:6px;}
+    .${NS}-tl{color:#5b6f80;font-variant-numeric:tabular-nums;white-space:nowrap;}
+    .${NS}-tl-soon{color:#b25c00;font-weight:600;}
+    .${NS}-tl-now{color:#c62828;font-weight:700;}
+    .${NS}-st{font-weight:600;}
+    .${NS}-st-win{color:#1b7f3a;}
+    .${NS}-st-lose{color:#c62828;}
+
     /* Floating pulse loader. Purely decorative: fixed, non-interactive, and it
        never gates rendering — the page and every DOM-derived block are already
        in place while this is visible. */
@@ -1973,6 +1997,79 @@
     if (!isFinite(h24)) return day;
     const ampm = h24 >= 12 ? 'pm' : 'am';
     return `${day}, ${h24 % 12 || 12}:${m[5]} ${ampm}`;
+  }
+
+  /**
+   * How long is left to bid, as at most two units: "6d 23h", "23h 15m", "45m",
+   * "30s". Returns null when there is nothing trustworthy to show.
+   *
+   * Two units rather than three. HiBid prints "6d 23h 15m", but the minutes are
+   * noise next to six days, and on a tile every character competes with the
+   * numbers that decide the bid. The unit that matters is always the largest one
+   * plus its remainder.
+   *
+   * `native` is `lotState.timeLeft`, which is HiBid's own string and is preferred
+   * whenever it is populated: it is per-lot, so on an auction that staggers lot
+   * closes it is right where an auction-wide close time would be wrong. It is
+   * empty on plenty of auctions, hence `closeAt`.
+   *
+   * `closeAt` is an auction `bidCloseDateTime`, which arrives with no offset and
+   * is already the auction's local wall clock — so it is compared against the
+   * viewer's local wall clock rather than parsed as UTC, for the same reason
+   * fmtDateTime does its own string arithmetic.
+   *
+   * `urgency` drives colour only: 'now' under an hour, 'soon' under a day.
+   */
+  function timeLeft(native, closeAt, nowMs) {
+    const unit = (ms) => {
+      if (!isFinite(ms) || ms <= 0) return null;
+      const s = Math.floor(ms / 1000);
+      const d = Math.floor(s / 86400);
+      const h = Math.floor((s % 86400) / 3600);
+      const m = Math.floor((s % 3600) / 60);
+      if (d) return { text: h ? `${d}d ${h}h` : `${d}d`, ms };
+      if (h) return { text: m ? `${h}h ${m}m` : `${h}h`, ms };
+      if (m) return { text: `${m}m`, ms };
+      return { text: `${s}s`, ms };
+    };
+    const grade = (ms) => (ms < 3600e3 ? 'now' : ms < 86400e3 ? 'soon' : '');
+
+    // HiBid's own string wins, compacted to two units and with "0d"-style noise dropped.
+    const raw = String(native == null ? '' : native).trim();
+    if (raw) {
+      const parts = raw.match(/(\d+)\s*(d|h|m|s)/gi) || [];
+      /*
+       * A string that parsed as a duration is handled as one even when every unit
+       * is zero. "0d 0h 0m" means the lot has run out, so it must be nothing at
+       * all — the word branch below would otherwise match the d/h/m letters and
+       * print the zeroes back onto the tile as if they were a countdown.
+       */
+      if (parts.length) {
+        const per = { d: 86400e3, h: 3600e3, m: 60e3, s: 1000 };
+        const got = parts.map((p) => {
+          const [, n, u] = p.match(/(\d+)\s*(d|h|m|s)/i);
+          return { n: Number(n), u: u.toLowerCase() };
+        }).filter((x) => x.n > 0);
+        if (!got.length) return null;
+        const ms = got.reduce((a, x) => a + x.n * per[x.u], 0);
+        return {
+          text: got.slice(0, 2).map((x) => `${x.n}${x.u}`).join(' '),
+          urgency: grade(ms),
+          source: 'lot',
+        };
+      }
+      // Something like "Closed" or "Ended": pass it through, but claim no urgency.
+      if (/[a-z]/i.test(raw)) return { text: raw.slice(0, 14), urgency: '', source: 'lot' };
+      return null;
+    }
+
+    const m = String(closeAt == null ? '' : closeAt)
+      .match(/^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2}))?)?/);
+    if (!m) return null;
+    const close = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]),
+      Number(m[4] || 0), Number(m[5] || 0), Number(m[6] || 0));
+    const got = unit(close.getTime() - nowMs);
+    return got ? { text: got.text, urgency: grade(got.ms), source: 'auction' } : null;
   }
 
   /** "23 Buchanan Crt, London, ON N5Z 4P9" from whatever parts exist. */
@@ -3633,11 +3730,23 @@
       return body.data;
     },
 
-    /** Lots by event-item id. pageLength caps at 100 server-side. */
+    /*
+     * Lots by event-item id. pageLength caps at 100 server-side.
+     *
+     * `lotState.timeLeft` is a String, and it is what HiBid itself renders as
+     * "6d 23h 15m" on a tile. It is empty on some auctions — measured empty for
+     * every lot of auction 764522 — which is why the countdown shows on some lot
+     * lists and not others. There is no per-lot close time to fall back on:
+     * utcBiddingEndDate, biddingEndDate, lotEndDateTime, closeDateTime,
+     * endDateTime and bidCloseDateTime are all rejected on type 'Lot', and
+     * LotState has no secondsLeft, endTime or closeTime. The auction's own
+     * bidCloseDateTime is the only other source, so that is the fallback.
+     */
     async lots(ids) {
       const query = 'query HesLots($ids: [Int!], $pageNumber: Int!, $pageLength: Int!) {' +
         ' lotSearch(input: {eventItemIds: $ids, status: ALL}, pageNumber: $pageNumber, pageLength: $pageLength) {' +
-        ' pagedResults { results { id lead description estimate lotNumber } } } }';
+        ' pagedResults { results { id lead description estimate lotNumber' +
+        ' lotState { timeLeft } } } } }';
       const out = [];
       for (let i = 0; i < ids.length; i += 100) {
         const data = await GQL.post('HesLots', query, {
@@ -3701,7 +3810,7 @@
        */
       const query = 'query HesAuction($id: Int!) { auction(id: $id) {' +
         ' id termsAndConditions buyerPremium buyerPremiumRate paymentInfo' +
-        ' shippingAndPickupInfo auctionNotice biddingNotice } }';
+        ' shippingAndPickupInfo auctionNotice biddingNotice bidCloseDateTime } }';
       const data = await GQL.post('HesAuction', query, { id: auctionId });
       const a = (data || {}).auction || {};
       return {
@@ -3714,6 +3823,12 @@
                a.buyerPremiumRate > 1.0 && a.buyerPremiumRate < 1.5)
           ? (a.buyerPremiumRate - 1) * 100
           : null,
+        /*
+         * Free on this request, and the only time source for auctions that leave
+         * lotState.timeLeft empty. HiBid sends these stamps without a zone; see
+         * fmtDateTime for why they are treated as local rather than UTC.
+         */
+        closeAt: a.bidCloseDateTime || null,
       };
     },
   };
@@ -4376,9 +4491,55 @@
           fees.premiumPct = terms.rate;
           fees.premiumSource = `auction.buyerPremiumRate (${terms.rate}%)`;
         }
-        out.set(id, { fees, estimated: /fallback/.test(fees.premiumSource || '') });
+        out.set(id, {
+          fees,
+          estimated: /fallback/.test(fees.premiumSource || ''),
+          closeAt: terms.closeAt || null,
+        });
       }
       return out;
+    },
+
+    /**
+     * Fold bid count, time left and win/lose status onto one line.
+     *
+     * The tile spent three rows on three short strings: "4 Bids", the countdown,
+     * and "Outbid". Measured on a live tile at 283px, the status row alone was
+     * 21px of that. They are the three facts that decide whether to raise, so
+     * they belong in one left-to-right read directly under the bid.
+     *
+     * The status text is Angular's and is left in place rather than moved, since
+     * it rewrites itself on every live bid update; it is copied here and the
+     * original row is hidden by the stylesheet. Copying keeps this idempotent —
+     * re-running after a re-render overwrites rather than appends.
+     */
+    setMeta(tile, { left, status }) {
+      const host = tile.node.querySelector('.bids-and-links');
+      if (!host) return;
+
+      let strip = host.querySelector(`.${NS}-meta`);
+      if (!strip) {
+        strip = el('span', { class: `${NS}-meta` });
+        host.appendChild(strip);
+      }
+      strip.textContent = '';
+
+      if (left) {
+        strip.appendChild(el('span', {
+          class: `${NS}-tl` + (left.urgency ? ` ${NS}-tl-${left.urgency}` : ''),
+          text: left.text,
+          title: left.source === 'lot'
+            ? 'Time left on this lot, from HiBid'
+            : 'This auction publishes no per-lot countdown, so this is when the ' +
+              'whole auction closes',
+        }));
+      }
+      if (status) {
+        strip.appendChild(el('span', {
+          class: `${NS}-st ${NS}-st-${/winning|won/i.test(status) ? 'win' : 'lose'}`,
+          text: status,
+        }));
+      }
     },
 
     async enhance() {
@@ -4393,6 +4554,8 @@
       Loader.show();
       try {
         Tidy.page();
+        // Scopes the bids-only rules: the merged status row and hiding Notes.
+        document.body.classList.add(`${NS}-bids`);
 
         const byTile = Bids.auctionMap(tiles);
         const auctionIds = [...new Set([...byTile.values()].filter((v) => v != null))];
@@ -4406,6 +4569,7 @@
         // ---- pass 1: final price and status, no per-lot network -----------
         const work = [];
         const costCache = new Map();
+        const now = Date.now();
         for (const tile of tiles) {
           const auctionId = byTile.get(tile.node);
           const entry = feeMap.get(auctionId);
@@ -4436,11 +4600,23 @@
             return BID_STATUS_RE.test(t) ? t : '';
           })();
 
+          /*
+           * One `now` for the whole sweep. Reading the clock per tile would let a
+           * long pass print two different remaining times for lots that close
+           * together, which reads as a bug even though both were true when taken.
+           */
+          const left = timeLeft(
+            ((lot.lotState || {}).timeLeft) || '',
+            entry ? entry.closeAt : null,
+            now,
+          );
+          Bids.setMeta(tile, { left, status });
+
           const product = extractProduct(lead, description);
           const stated = extractStatedRetail(lead, description, lot.estimate || '');
           if (stated) product.statedRetail = stated.value;
 
-          work.push({ tile, product, stated, cond, cost, next, large, fees, estimated, status });
+          work.push({ tile, product, stated, cond, cost, next, large, fees, estimated, status, left });
         }
 
         /*
@@ -4565,6 +4741,10 @@
       document.body.classList.remove(`${NS}-tidy`);
       document.body.classList.remove(`${NS}-noimg`);
     }
+    // hes-bids hides the status row, so it must go the moment we leave a bids
+    // page — a catalog page shares this tile markup and would lose nothing
+    // visible, but a lot page would silently drop its own bid status.
+    if (kind !== 'bids') document.body.classList.remove(`${NS}-bids`);
     if (State.running) return;
     State.running = true;
     // The detail layout is a body class; a catalog page must not inherit it.
@@ -4718,7 +4898,7 @@
       modelMatches, looksLikeModel, compactTokens, priceFloor, isAccessoryListing,
       Providers, pickBest, lookupRetail,
       parseLotId, parseAuctionId, splitNotice, conditionTone, conditionChips,
-      infoFacts, fmtDateTime, formatAddress, Perf, correctFees,
+      infoFacts, fmtDateTime, formatAddress, Perf, correctFees, timeLeft,
       maxBidLabel, bidCountLabel, retailCacheKey, cachedRetail,
       setHttp: (fn) => { HTTP = fn || gmHttp; },
       setConfig: (patch) => { CFG = Object.assign({}, CFG, patch); },

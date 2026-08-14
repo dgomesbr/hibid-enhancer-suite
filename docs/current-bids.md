@@ -34,6 +34,51 @@ real page: 10 of 100 tiles faded.
 "Winning above retail" deliberately stays at full opacity. That one wants your
 attention, because you are on course to overpay.
 
+## One line for the three facts that decide a raise
+
+Bid count, time left and win/lose status sat in three separate rows, each holding
+one short string. They are now one line under the bid:
+
+```
+4 Bids · 2d 21h · Outbid
+```
+
+Measured on a live tile, that took it from **283px to 260px**, so about a tile more
+per screen when scrolling 100 of them. The status row was 21px of furniture around
+a single word.
+
+The time is coloured only by urgency: plain over a day, amber inside a day, red
+inside an hour. Being outbid on a lot closing in three days is not a decision yet.
+Being outbid on one closing in twenty minutes is the only thing on the page worth
+looking at, and nothing in the original layout distinguished the two.
+
+**Where the time comes from.** `lotState.timeLeft` is HiBid's own per-lot string,
+the one it renders as `6d 23h 15m`, and it is used whenever it is populated —
+per-lot matters on an auction that staggers its lot closes. It is empty on plenty
+of auctions, though: every lot of auction 764522 measured empty, which is exactly
+why the countdown shows on some lot lists and not others.
+
+There is no per-lot close time to fall back on. `utcBiddingEndDate`,
+`biddingEndDate`, `lotEndDateTime`, `closeDateTime`, `endDateTime` and
+`bidCloseDateTime` are all rejected on type `Lot`, and `LotState` has no
+`secondsLeft`, `endTime` or `closeTime`. So the fallback is the auction's own
+`bidCloseDateTime`, which is when the whole auction closes. The tooltip says which
+of the two you are looking at, because they are not the same claim.
+
+Three units are cut to two. HiBid prints `6d 23h 15m`; the minutes are noise
+beside six days, and on a 153px-wide line every character competes with the
+numbers that decide the bid.
+
+**No ticking clock.** The time is rendered once per pass, not held on an interval.
+Rewriting 100 nodes every second, on a page whose tiles Angular re-renders
+underneath us, buys second-precision that no decision made over minutes needs. One
+clock reading is taken for the whole sweep, so lots that close together cannot
+print two different remaining times.
+
+Notes is hidden and Unwatch kept. Both are hidden rather than removed, as
+everywhere else here — Angular owns them and re-creates them, and deleting a node
+it is tracking can blank the tile.
+
 ## No credentials are touched
 
 Your own maximum bid would be useful here and is **deliberately not used**. It

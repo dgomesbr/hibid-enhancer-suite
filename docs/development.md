@@ -54,6 +54,19 @@ New page types plug into the `PAGES` registry near the bottom of the script; the
 fee engine, product extraction and price providers are page-agnostic and reusable
 as-is.
 
+## Where the lot data comes from
+
+SECTION 16 talks to HiBid's own GraphQL endpoint at `<origin>/graphql`, because a
+catalog tile carries a title and a bid and nothing else worth pricing. Two POSTs
+there replace 100 page fetches.
+
+Introspection on that endpoint is blocked, so the field names in SECTION 16 were
+found by sending candidates and reading which ones the error named.
+[HiBid's GraphQL endpoint](graphql.md) is the write-up: every type and field, the
+enums, what the mutation surface looks like, the fields that do not exist, and
+the traps — `bidAmount` is the constant 123.45, `buyerPremiumRate` reads 1 when
+it is unset, and a lot has no close datetime at all.
+
 ## Notes and limits
 
 - **Auction prices move constantly.** The script reads the bid at render time.

@@ -295,11 +295,11 @@ fragment and was then re-sent field by field.
 | `bidCount` | `Int` | live | |
 | `status` | `LotStatus` | live | `OPEN`, `CLOSED`, `CLOSED_SHOW_STATUS`, and more |
 | `isClosed` | `Boolean` | live | Can be `false` while `status` is `CLOSED_SHOW_STATUS`. Trust `status` |
-| `timeLeft` | `String` | live | Display text: `"14s"`, `"Closing.."`, `"Bidding Closed"`. Empty before bidding opens |
-| `timeLeftSeconds` | `Float` | live | The numeric countdown, e.g. `-57.583` once closed. **Not currently used by the script** |
+| `timeLeft` | `String` | live | Display text: `"14s"`, `"Closing.."`, `"Bidding Closed"`. `""` on some auctions that are open for bidding — see the traps below |
+| `timeLeftSeconds` | `Float` | live | The numeric countdown, e.g. `-57.583` once closed. `0` on the same auctions where `timeLeft` is `""`, so it is not a way round that |
 | `timeLeftWithLimboSeconds` | `Float` | live | A second later than `timeLeftSeconds`; covers the soft-close limbo |
-| `timeLeftTitle` | `String` | live | The tooltip, and the only place a close time appears: `"Internet Bidding closed at: 8/13/2026 8:34:00 PM EST"` |
-| `timeLeftLead` | `String` | live | `""` on the lots tried |
+| `timeLeftTitle` | `String` | live | The tooltip, and the only place a close time appears: `"Internet Bidding closed at: 8/13/2026 8:34:00 PM EST"`. Also `""` on those same auctions |
+| `timeLeftLead` | `String` | live | `""` on every lot tried, including live ones |
 | `priceRealized` | `Decimal` | live | The hammer price once closed, `0` before |
 | `priceRealizedPerEach` | `Decimal` | live | |
 | `priceRealizedMessage` | `String` | live | `null` when the auctioneer hides the result |
@@ -626,12 +626,27 @@ rate as a last resort, which is what SECTION 16 already does.
 **`buyerPremium` is often prose, not a number.** On 764522 it is
 `"Please see Terms and Conditions"`.
 
-**`lotState.timeLeft` is empty before bidding opens.** SECTION 16 notes it is
-empty on some auctions and that this is why the countdown appears
-inconsistently. The pattern is narrower than that: on auction 764522, whose
-`auctionStatus` is `OPEN_ABSENTEE` and whose bidding had not begun, `timeLeft`
-was `""`; on live auction 764678 the same field gave `"14s"`, `"Closing.."` and
-`"Bidding Closed"`. Use `timeLeftSeconds` and skip the string.
+**Every time field can be empty on an auction that is open.** On auction 764522,
+bidding open since 28 July 2026 and closing 16 August, with `lotState.status`
+reading `OPEN` and `isClosed: false`, all four of `timeLeft` (`""`),
+`timeLeftSeconds` (`0`), `timeLeftTitle` (`""`) and `timeLeftLead` (`""`) came back
+unpopulated, re-checked on 13 August with bidding underway. On live auction 764678
+the same `timeLeft` gave `"14s"`, `"Closing.."` and `"Bidding Closed"`.
+
+So the split is not "before bidding opens" and it is not confined to the string:
+whatever drives it, an auction can be open for bidding and publish no countdown of
+any kind. Reaching for `timeLeftSeconds` instead of the string does not avoid the
+problem, because it is `0` on exactly the auctions where the string is empty.
+
+The only remaining time source for those auctions is the auction's own
+`bidCloseDateTime`. That is what the script does as of v0.13.0: `timeLeft` when it
+is populated, since it is per-lot and therefore right on an auction that staggers
+its lot closes, and the auction close when it is not. The two are different claims,
+so the tooltip says which one is on screen.
+
+`timeLeftSeconds` is still the better *shape* where a countdown exists — a number
+beats parsing `"6d 23h 15m"` — and switching to it would be a fair cleanup. It is
+not a fix for the empty case.
 
 **`isClosed` and `status` disagree.** Lot 315064563 came back with
 `isClosed: false`, `status: CLOSED_SHOW_STATUS` and `timeLeft: "Closing.."`.

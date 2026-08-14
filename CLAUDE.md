@@ -56,9 +56,12 @@ gh issue close 12 --comment "Shipped in v0.13.0 — <what a user will now see>."
 ```
 
 **What does not need an issue:** a bug fix (that has its own form), a typo, a doc
-edit, a test, a refactor with no user-visible change, or anything already asked for
-directly in conversation. If it changes what a bidder sees on a HiBid page and
-nobody has asked for it yet, it is a feature and it needs an issue first.
+edit, a test, or a refactor with no user-visible change. If it changes what a bidder
+sees on a HiBid page, it is a feature and it needs an issue first.
+
+Being asked for it directly is not an exemption — it is the normal case. A request
+made in chat is exactly the reasoning that would otherwise go unrecorded, so it is
+the case the issue exists to capture. Write the issue, then build.
 
 ## 2. Every change ships as a tagged, published release
 
